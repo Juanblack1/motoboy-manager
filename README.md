@@ -1,5 +1,9 @@
 # Motoboy Manager
 
+<p align="center">
+  <img src="assets/cover.png" alt="Motoboy Manager cover" width="100%" />
+</p>
+
 Sistema demo para gerenciamento de entregas com cliente, admin, motoboy, rastreamento autenticado e mapa com ETA.
 
 ## Recursos
