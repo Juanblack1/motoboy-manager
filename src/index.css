@@ -1420,6 +1420,24 @@ button:disabled {
   z-index: 950;
 }
 
+.notifications-panel-head {
+  display: grid;
+  gap: 8px;
+}
+
+.notification-mark-all,
+.notification-read-action {
+  background: rgba(16, 33, 27, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
 .notification-list {
   display: grid;
   gap: 8px;
@@ -1434,6 +1452,40 @@ button:disabled {
   display: grid;
   gap: 5px;
   padding: 12px;
+}
+
+.notification-row.unread {
+  background: #fff7da;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.notification-main {
+  align-items: start;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0;
+  text-align: left;
+}
+
+.notification-dot {
+  background: var(--green);
+  border-radius: 999px;
+  height: 9px;
+  margin-top: 6px;
+  width: 9px;
+}
+
+.notification-row.read .notification-dot {
+  background: rgba(16, 33, 27, 0.18);
+}
+
+.notification-read-action {
+  justify-self: end;
+  min-height: 30px;
 }
 
 .notification-row p,
@@ -1920,6 +1972,40 @@ button:disabled {
   display: grid;
   gap: 12px;
   margin-top: 4px;
+}
+
+.client-static-status {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 220px;
+  padding: 24px;
+}
+
+.client-static-status.done {
+  background: var(--green-soft);
+}
+
+.client-static-status.cancelled {
+  background: #ffe0de;
+}
+
+.client-static-status strong {
+  color: var(--ink);
+  display: block;
+  font-size: 24px;
+  letter-spacing: -0.04em;
+  margin-bottom: 6px;
+}
+
+.client-static-status p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
 }
 
 .empty-block {

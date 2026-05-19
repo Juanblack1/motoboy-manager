@@ -76,6 +76,8 @@ type Copy = typeof translations['pt-BR']
 
 type NotificationItem = {
   id: string
+  orderId: string
+  read: boolean
   title: string
   description: string
   time: string
@@ -466,13 +468,19 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
   const deliveredToday = snapshot.orders.filter((order) => order.status === 'delivered').length
   const delayed = snapshot.orders.filter((order) => order.status === 'delayed')
   const onlineCouriers = snapshot.couriers.filter((courier) => courier.status !== 'offline')
-  const notifications = makeNotificationItems(snapshot.events, snapshot.orders, copy, locale)
+  const { markAllNotificationsRead, markNotificationRead, readNotificationIds } = useNotificationReadState(user.id)
+  const notifications = makeNotificationItems(snapshot.events, snapshot.orders, copy, locale, readNotificationIds)
+
+  function openNotification(notification: NotificationItem) {
+    setSelectedOrderId(notification.orderId)
+    setTab('orders')
+  }
 
   return (
     <main className="workspace-shell">
       <AdminSidebar active={tab} logout={logout} setActive={setTab} user={user} />
       <section className="workspace-main">
-        <WorkspaceTopbar notifications={notifications} search={search} setSearch={setSearch} title={copy.topbar.adminTitle} />
+        <WorkspaceTopbar markAllNotificationsRead={() => markAllNotificationsRead(notifications.map((notification) => notification.id))} markNotificationRead={markNotificationRead} notifications={notifications} openNotification={openNotification} search={search} setSearch={setSearch} title={copy.topbar.adminTitle} />
         {tab === 'dashboard' ? (
           <AdminDashboard
             activeOrders={activeOrders}
@@ -527,9 +535,24 @@ function AdminSidebar({ active, logout, setActive, user }: { active: AdminTab; l
   )
 }
 
-function WorkspaceTopbar({ notifications = [], search, setSearch, title }: { notifications?: NotificationItem[]; search: string; setSearch: (value: string) => void; title: string }) {
+function WorkspaceTopbar({ markAllNotificationsRead, markNotificationRead, notifications = [], openNotification, search, setSearch, title }: {
+  markAllNotificationsRead?: () => void
+  markNotificationRead?: (id: string) => void
+  notifications?: NotificationItem[]
+  openNotification?: (notification: NotificationItem) => void
+  search: string
+  setSearch: (value: string) => void
+  title: string
+}) {
   const { copy } = useI18n()
   const [open, setOpen] = useState(false)
+  const unreadCount = notifications.filter((notification) => !notification.read).length
+
+  function openItem(notification: NotificationItem) {
+    markNotificationRead?.(notification.id)
+    openNotification?.(notification)
+    setOpen(false)
+  }
 
   return (
     <header className="workspace-topbar">
@@ -538,18 +561,27 @@ function WorkspaceTopbar({ notifications = [], search, setSearch, title }: { not
       <div className="notifications-menu">
         <button className="icon-button" aria-expanded={open} aria-label={copy.topbar.notifications} onClick={() => setOpen((current) => !current)} type="button">
           <Bell size={16} />
-          {notifications.length ? <span className="notification-badge">{notifications.length}</span> : null}
+          {unreadCount ? <span className="notification-badge">{unreadCount}</span> : null}
         </button>
         {open ? (
           <div className="notifications-panel" role="dialog" aria-label={copy.topbar.notifications}>
-            <PanelTitle action={notifications.length ? copy.topbar.notificationCount(notifications.length) : undefined} title={copy.topbar.latestNotifications} />
+            <div className="notifications-panel-head">
+              <PanelTitle action={unreadCount ? copy.topbar.notificationCount(unreadCount) : copy.topbar.allRead} title={copy.topbar.latestNotifications} />
+              {notifications.length ? <button className="notification-mark-all" onClick={markAllNotificationsRead} type="button">{copy.topbar.markAllRead}</button> : null}
+            </div>
             {notifications.length ? (
               <div className="notification-list">
                 {notifications.map((item) => (
-                  <article className="notification-row" key={item.id}>
-                    <strong>{item.title}</strong>
-                    <p>{item.description}</p>
-                    <time>{item.time}</time>
+                  <article className={`notification-row ${item.read ? 'read' : 'unread'}`} key={item.id}>
+                    <button className="notification-main" onClick={() => openItem(item)} type="button">
+                      <span className="notification-dot" />
+                      <span>
+                        <strong>{item.title}</strong>
+                        <p>{item.description}</p>
+                        <time>{item.time}</time>
+                      </span>
+                    </button>
+                    {!item.read ? <button className="notification-read-action" onClick={() => markNotificationRead?.(item.id)} type="button">{copy.topbar.markRead}</button> : null}
                   </article>
                 ))}
               </div>
@@ -879,14 +911,21 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
   const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === session.id)
   const filteredClientOrders = clientOrders.filter((order) => matchesOrder(order, search))
   const selectedOrder = clientOrders.find((order) => order.id === selectedOrderId) ?? clientOrders[0] ?? null
-  const selectedLocation = selectedOrder ? (snapshot.locations.find((location) => location.orderId === selectedOrder.id || location.courierId === selectedOrder.assignedCourierId) ?? null) : null
-  const eta = selectedOrder && selectedLocation ? estimateEtaFromLocation(selectedLocation, selectedOrder.destination) : routePlan?.etaMinutes ?? selectedOrder?.etaMinutes ?? 0
+  const canTrackSelectedOrder = selectedOrder ? canClientTrackCourier(selectedOrder) : false
+  const selectedLocation = selectedOrder && canTrackSelectedOrder ? (snapshot.locations.find((location) => location.orderId === selectedOrder.id || location.courierId === selectedOrder.assignedCourierId) ?? null) : null
+  const eta = selectedOrder && canTrackSelectedOrder && selectedLocation ? estimateEtaFromLocation(selectedLocation, selectedOrder.destination) : routePlan?.etaMinutes ?? selectedOrder?.etaMinutes ?? 0
   const activeClientOrders = clientOrders.filter((order) => order.status === 'queued' || activeStatuses.includes(order.status))
   const highlightedOrder = activeClientOrders[0] ?? clientOrders[0] ?? null
   const pageTitle = tab === 'dashboard' ? copy.client.dashboardTitle : tab === 'orders' ? copy.client.ordersTitle : copy.client.requestTitle
   const effectiveShopId = activeShops.some((shop) => shop.id === shopId) ? shopId : activeShops[0]?.id ?? ''
   const clientOrderIds = new Set(clientOrders.map((order) => order.id))
-  const notifications = makeNotificationItems(snapshot.events.filter((event) => clientOrderIds.has(event.orderId)), clientOrders, copy, locale)
+  const { markAllNotificationsRead, markNotificationRead, readNotificationIds } = useNotificationReadState(session.id)
+  const notifications = makeNotificationItems(snapshot.events.filter((event) => clientOrderIds.has(event.orderId)), clientOrders, copy, locale, readNotificationIds)
+
+  function openNotification(notification: NotificationItem) {
+    setSelectedOrderId(notification.orderId)
+    setTab('orders')
+  }
 
   useEffect(() => {
     if (itemName === previousDefaultItem.current) setItemName(copy.client.defaultItem)
@@ -929,7 +968,7 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
         <button className="sidebar-logout" onClick={logout} type="button"><LogOut size={15} /> {copy.sidebar.logout}</button>
       </aside>
       <section className="workspace-main client-main">
-        <WorkspaceTopbar notifications={notifications} search={search} setSearch={setSearch} title={pageTitle} />
+        <WorkspaceTopbar markAllNotificationsRead={() => markAllNotificationsRead(notifications.map((notification) => notification.id))} markNotificationRead={markNotificationRead} notifications={notifications} openNotification={openNotification} search={search} setSearch={setSearch} title={pageTitle} />
         {tab === 'dashboard' ? (
           <ClientDashboardView
             activeOrders={activeClientOrders}
@@ -1125,11 +1164,25 @@ function ClientNewOrderView({ activeShops, destinationIndex, itemName, phone, se
 
 function ClientOrderPreview({ eta, order, routePlan, selectedLocation }: { eta: number; order: Order; routePlan: RoutePlan | null; selectedLocation: CourierLocation | null }) {
   const { copy, locale } = useI18n()
+  const canTrack = canClientTrackCourier(order)
+  const isCompleted = order.status === 'delivered'
+  const isCancelled = order.status === 'cancelled'
+
   return (
     <div className="client-preview">
       <span className={`status-pill ${order.status}`}>{statusLabel(order.status, locale)}</span>
-      <MapCanvas height="320px" locale={locale} locations={selectedLocation ? [selectedLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} />
-      <div className="detail-metrics"><span>{order.assignedCourierId ? copy.courier.eta(eta) : copy.client.awaitingAdmin}</span><span>{formatCurrency(order.totalCents, locale)}</span></div>
+      {canTrack ? (
+        <MapCanvas height="320px" locale={locale} locations={selectedLocation ? [selectedLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} />
+      ) : (
+        <div className={`client-static-status ${isCompleted ? 'done' : isCancelled ? 'cancelled' : ''}`}>
+          <CheckCircle2 size={22} />
+          <div>
+            <strong>{isCompleted ? copy.client.deliveryCompleted : isCancelled ? copy.client.deliveryCancelled : copy.client.awaitingAdmin}</strong>
+            <p>{isCompleted || isCancelled ? copy.client.liveLocationHidden : copy.client.waitingDispatchText}</p>
+          </div>
+        </div>
+      )}
+      <div className="detail-metrics"><span>{getClientTrackingLabel(order, eta, copy)}</span><span>{formatCurrency(order.totalCents, locale)}</span></div>
     </div>
   )
 }
@@ -1493,6 +1546,27 @@ function useI18n() {
   return context
 }
 
+function useNotificationReadState(scopeId: string) {
+  const storageKey = `motoboy-manager-notifications-read-${scopeId}`
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => readNotificationIdsFromStorage(storageKey))
+
+  function persistReadIds(nextIds: string[]) {
+    const uniqueIds = Array.from(new Set(nextIds))
+    window.localStorage.setItem(storageKey, JSON.stringify(uniqueIds.slice(-120)))
+    return uniqueIds
+  }
+
+  function markNotificationRead(id: string) {
+    setReadNotificationIds((current) => persistReadIds([...current, id]))
+  }
+
+  function markAllNotificationsRead(ids: string[]) {
+    setReadNotificationIds((current) => persistReadIds([...current, ...ids]))
+  }
+
+  return { markAllNotificationsRead, markNotificationRead, readNotificationIds }
+}
+
 function getNextStatus(status: DeliveryStatus): DeliveryStatus | null {
   if (status === 'assigned') return 'pickup'
   if (status === 'pickup') return 'in_transit'
@@ -1515,6 +1589,17 @@ function getCourierStatusAfterOrderStatus(status: DeliveryStatus): CourierStatus
 
 function isDeliveryLeg(status: DeliveryStatus) {
   return status === 'in_transit' || status === 'delayed'
+}
+
+function canClientTrackCourier(order: Order) {
+  return Boolean(order.assignedCourierId && activeStatuses.includes(order.status))
+}
+
+function getClientTrackingLabel(order: Order, eta: number, copy: Copy) {
+  if (canClientTrackCourier(order)) return copy.courier.eta(eta)
+  if (order.status === 'delivered') return copy.client.deliveryCompleted
+  if (order.status === 'cancelled') return copy.client.deliveryCancelled
+  return copy.client.awaitingAdmin
 }
 
 function sortAvailableOrdersByDistance(orders: Order[], location: CourierLocation | null) {
@@ -1564,18 +1649,29 @@ function getCourierPhotoUrl(courier: Courier) {
   return `/assets/couriers/${courier.id}.svg`
 }
 
-function makeNotificationItems(events: DeliveryEvent[], orders: Order[], copy: Copy, locale: Locale): NotificationItem[] {
+function makeNotificationItems(events: DeliveryEvent[], orders: Order[], copy: Copy, locale: Locale, readNotificationIds: string[] = []): NotificationItem[] {
   return events.slice(0, 8).map((event) => {
     const order = orders.find((item) => item.id === event.orderId)
     const status = statusLabel(event.status, locale)
 
     return {
       id: event.id,
+      orderId: event.orderId,
+      read: readNotificationIds.includes(event.id),
       title: order ? copy.topbar.notificationTitle(order.number, status) : status,
       description: copy.topbar.notificationDescription(event.actorName, status),
       time: new Date(event.createdAt).toLocaleString(locale, { day: '2-digit', hour: '2-digit', minute: '2-digit', month: '2-digit' }),
     }
   })
+}
+
+function readNotificationIdsFromStorage(storageKey: string) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 function orderBelongsToShop(order: Order, shop: Shop) {

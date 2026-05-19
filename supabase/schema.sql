@@ -170,7 +170,9 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.orders o
-    where o.assigned_courier_id = p_courier_id and o.client_profile_id = auth.uid()
+    where o.assigned_courier_id = p_courier_id
+      and o.client_profile_id = auth.uid()
+      and o.status in ('assigned', 'pickup', 'in_transit', 'delayed')
   );
 $$;
 
