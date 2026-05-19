@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 
+import { translations, type Locale } from '../lib/i18n'
 import type { Coordinates, CourierLocation, Order, RoutePlan } from '../types'
 
 type MapCanvasProps = {
@@ -9,13 +10,15 @@ type MapCanvasProps = {
   locations: CourierLocation[]
   routePlan: RoutePlan | null
   height?: string
+  locale?: Locale
 }
 
 const pickupIcon = createMarkerIcon('pickup')
 const destinationIcon = createMarkerIcon('destination')
 const courierIcon = createMarkerIcon('courier')
 
-export function MapCanvas({ orders, selectedOrder, locations, routePlan, height = '520px' }: MapCanvasProps) {
+export function MapCanvas({ orders, selectedOrder, locations, routePlan, height = '520px', locale = 'pt-BR' }: MapCanvasProps) {
+  const copy = translations[locale].map
   const mapCenter = getMapCenter(selectedOrder, orders)
   const selectedLocation = selectedOrder
     ? locations.find((item) => item.orderId === selectedOrder.id || item.courierId === selectedOrder.assignedCourierId)
@@ -34,14 +37,14 @@ export function MapCanvas({ orders, selectedOrder, locations, routePlan, height 
           <>
             <Marker icon={pickupIcon} position={[selectedOrder.pickup.lat, selectedOrder.pickup.lng]}>
               <Popup>
-                <strong>Retirada</strong>
+                <strong>{copy.pickup}</strong>
                 <br />
                 {selectedOrder.pickupAddress}
               </Popup>
             </Marker>
             <Marker icon={destinationIcon} position={[selectedOrder.destination.lat, selectedOrder.destination.lng]}>
               <Popup>
-                <strong>Entrega</strong>
+                <strong>{copy.dropoff}</strong>
                 <br />
                 {selectedOrder.destinationAddress}
               </Popup>
@@ -59,9 +62,9 @@ export function MapCanvas({ orders, selectedOrder, locations, routePlan, height 
         {locations.map((location) => (
           <Marker icon={courierIcon} key={`${location.courierId}-${location.orderId ?? 'free'}`} position={[location.lat, location.lng]}>
             <Popup>
-              <strong>Motoboy online</strong>
+              <strong>{copy.courierOnline}</strong>
               <br />
-              Atualizado {new Date(location.recordedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              {copy.updated} {new Date(location.recordedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
             </Popup>
           </Marker>
         ))}

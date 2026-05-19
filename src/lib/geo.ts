@@ -1,36 +1,21 @@
 import type { Coordinates, Order, RoutePlan } from '../types'
+import { translations, type Locale } from './i18n'
 
 const averageCourierSpeedKmh = 24
 
-export function formatCurrency(cents: number) {
-  return new Intl.NumberFormat('pt-BR', {
+export function formatCurrency(cents: number, locale: Locale = 'pt-BR') {
+  return new Intl.NumberFormat(locale === 'pt-BR' ? 'pt-BR' : 'en-US', {
     style: 'currency',
     currency: 'BRL',
   }).format(cents / 100)
 }
 
-export function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    assigned: 'Atribuido',
-    cancelled: 'Cancelado',
-    delayed: 'Atrasado',
-    delivered: 'Entregue',
-    in_transit: 'A caminho',
-    pickup: 'Na retirada',
-    queued: 'Na fila',
-  }
-
-  return labels[status] ?? status
+export function statusLabel(status: string, locale: Locale = 'pt-BR') {
+  return translations[locale].status[status as keyof typeof translations['pt-BR']['status']] ?? status
 }
 
-export function courierStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    available: 'Disponivel',
-    busy: 'Em rota',
-    offline: 'Offline',
-  }
-
-  return labels[status] ?? status
+export function courierStatusLabel(status: string, locale: Locale = 'pt-BR') {
+  return translations[locale].courierStatus[status as keyof typeof translations['pt-BR']['courierStatus']] ?? status
 }
 
 export function haversineKm(start: Coordinates, end: Coordinates) {

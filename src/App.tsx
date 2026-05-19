@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Bell,
@@ -30,6 +30,7 @@ import {
 import { MapCanvas } from './components/MapCanvas'
 import { demoSnapshot } from './lib/demo-data'
 import { courierStatusLabel, estimateEtaFromLocation, formatCurrency, getRoutePlan, interpolatePoint, statusLabel } from './lib/geo'
+import { isLocale, translations, type Locale } from './lib/i18n'
 import {
   assignOrderToCourier,
   createClientOrder,
@@ -68,6 +69,16 @@ type RouteState =
 
 type AdminTab = 'dashboard' | 'orders' | 'couriers' | 'clients' | 'shops' | 'history'
 
+type Copy = typeof translations['pt-BR']
+
+type I18nContextValue = {
+  copy: Copy
+  locale: Locale
+  setLocale: (locale: Locale) => void
+}
+
+const I18nContext = createContext<I18nContextValue | null>(null)
+
 const activeStatuses: DeliveryStatus[] = ['assigned', 'pickup', 'in_transit', 'delayed']
 
 const destinationOptions = [
@@ -84,8 +95,19 @@ function App() {
   const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null)
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [locale, setLocaleState] = useState<Locale>(readLocale)
+  const copy = translations[locale]
 
   const selectedOrder = snapshot.orders.find((order) => order.id === selectedOrderId) ?? snapshot.orders[0] ?? null
+
+  function setLocale(nextLocale: Locale) {
+    setLocaleState(nextLocale)
+    window.localStorage.setItem('motoboy-manager-locale', nextLocale)
+  }
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
 
   useEffect(() => {
     const onPopState = () => setRoute(readRoute())
@@ -104,7 +126,7 @@ function App() {
         setSnapshot(nextSnapshot)
         setSelectedOrderId((current) => current || nextSnapshot.orders[0]?.id || '')
       } catch (error) {
-        showNotice(error instanceof Error ? error.message : 'Falha ao carregar dados da operacao.')
+        showNotice(error instanceof Error ? error.message : copy.notice.loadFailed)
       }
     }
 
@@ -114,7 +136,7 @@ function App() {
       active = false
       unsubscribe(channel)
     }
-  }, [session])
+  }, [copy.notice.loadFailed, session])
 
   useEffect(() => {
     if (!selectedOrder) return
@@ -140,9 +162,9 @@ function App() {
       const user = await signInWithDemoRole(role)
       setSession(user)
       navigate(role === 'admin' ? '/admin' : role === 'client' ? '/cliente' : '/motoboy')
-      showNotice(`Sessao iniciada como ${user.name}.`)
+      showNotice(copy.notice.sessionStarted(user.name))
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : 'Nao foi possivel entrar.')
+      showNotice(error instanceof Error ? error.message : copy.notice.signInFailed)
     } finally {
       setLoading(false)
     }
@@ -152,7 +174,7 @@ function App() {
     await signOut()
     setSession(null)
     navigate('/')
-    showNotice('Sessao encerrada.')
+    showNotice(copy.notice.sessionEnded)
   }
 
   function showNotice(message: string) {
@@ -165,9 +187,9 @@ function App() {
       const order = await createClientOrder(input)
       setSnapshot((current) => ({ ...current, orders: [order, ...current.orders] }))
       setSelectedOrderId(order.id)
-      showNotice('Pedido criado e enviado para o admin.')
+      showNotice(copy.notice.orderCreated)
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : 'Falha ao criar pedido.')
+      showNotice(error instanceof Error ? error.message : copy.notice.orderCreateFailed)
     }
   }
 
@@ -178,7 +200,7 @@ function App() {
       orderId: order.id,
       actorName: session?.name ?? 'Admin',
       status: 'assigned',
-      message: `Pedido atribuido para ${courier?.name ?? 'motoboy'}.`,
+      message: copy.notice.orderAssigned(courier?.name ?? copy.queue.noCourier),
       createdAt: new Date().toISOString(),
     }
 
@@ -190,7 +212,7 @@ function App() {
     }))
 
     void assignOrderToCourier(order.id, courierId, session?.name ?? 'Admin').catch((error) => {
-      showNotice(error instanceof Error ? error.message : 'Falha ao atribuir pedido.')
+      showNotice(error instanceof Error ? error.message : copy.notice.assignFailed)
     })
   }
 
@@ -204,7 +226,7 @@ function App() {
           orderId: order.id,
           actorName,
           status,
-          message: `Status alterado para ${statusLabel(status)}.`,
+          message: copy.notice.statusChanged(statusLabel(status, locale)),
           createdAt: new Date().toISOString(),
         },
         ...current.events,
@@ -212,7 +234,7 @@ function App() {
     }))
 
     void updateOrderStatus(order.id, status, actorName).catch((error) => {
-      showNotice(error instanceof Error ? error.message : 'Falha ao atualizar status.')
+      showNotice(error instanceof Error ? error.message : copy.notice.statusFailed)
     })
   }
 
@@ -226,7 +248,7 @@ function App() {
     }))
 
     void upsertLocation(location).catch((error) => {
-      showNotice(error instanceof Error ? error.message : 'Falha ao enviar localizacao.')
+      showNotice(error instanceof Error ? error.message : copy.notice.locationFailed)
     })
   }
 
@@ -237,7 +259,7 @@ function App() {
     }))
 
     void updateCourierStatus(courier.id, status).catch((error) => {
-      showNotice(error instanceof Error ? error.message : 'Falha ao atualizar motoboy.')
+      showNotice(error instanceof Error ? error.message : copy.notice.courierFailed)
     })
   }
 
@@ -248,13 +270,14 @@ function App() {
         ...current,
         shops: [shop, ...current.shops.filter((item) => item.id !== shop.id)].sort((a, b) => a.name.localeCompare(b.name)),
       }))
-      showNotice(shopId ? 'Loja atualizada.' : 'Loja criada.')
+      showNotice(shopId ? copy.notice.shopUpdated : copy.notice.shopCreated)
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : 'Falha ao salvar loja.')
+      showNotice(error instanceof Error ? error.message : copy.notice.shopFailed)
     }
   }
 
   return (
+    <I18nContext.Provider value={{ copy, locale, setLocale }}>
     <div className="app-shell">
       {notice ? <div className="toast" role="status">{notice}</div> : null}
 
@@ -314,6 +337,7 @@ function App() {
         )
       ) : null}
     </div>
+    </I18nContext.Provider>
   )
 }
 
@@ -323,6 +347,7 @@ function HomePage({ loading, login, navigate, snapshot }: {
   navigate: (path: string) => void
   snapshot: AppSnapshot
 }) {
+  const { copy } = useI18n()
   const activeOrders = snapshot.orders.filter((order) => activeStatuses.includes(order.status)).length
   const delivered = snapshot.orders.filter((order) => order.status === 'delivered').length + 500
   const onlineCouriers = snapshot.couriers.filter((courier) => courier.status !== 'offline').length + 48
@@ -333,51 +358,53 @@ function HomePage({ loading, login, navigate, snapshot }: {
         <button className="home-brand" onClick={() => navigate('/')} type="button">
           <Navigation size={18} /> Motoboy Manager
         </button>
-        <nav aria-label="Institucional">
-          <a href="#solutions">Solucoes</a>
-          <a href="#pricing">Precos</a>
-          <a href="#contact">Contato</a>
-          <button onClick={() => login('admin')} type="button">Entrar</button>
+        <nav aria-label={copy.home.solutions}>
+          <a href="#solutions">{copy.home.solutions}</a>
+          <a href="#pricing">{copy.home.pricing}</a>
+          <a href="#contact">{copy.home.contact}</a>
+          <button onClick={() => login('admin')} type="button">{copy.home.signIn}</button>
+          <LanguageSwitcher />
         </nav>
       </header>
 
       <section className="home-hero">
         <div className="home-copy">
-          <h1>A gestao completa da sua logistica de entregas</h1>
-          <p>Centralize pedidos, rastreie frota em tempo real e aumente a eficiencia das suas operacoes diarias com uma plataforma focada em performance.</p>
+          <h1>{copy.home.heroTitle}</h1>
+          <p>{copy.home.heroText}</p>
           <div className="hero-metrics">
-            <MiniMetric icon={<PackageCheck size={18} />} label="Entregas hoje" value={`${delivered}+`} />
-            <MiniMetric icon={<Bike size={18} />} label="Motoboys ativos" value={String(onlineCouriers)} />
-            <MiniMetric icon={<Gauge size={18} />} label="Pedidos ativos" value={String(activeOrders)} />
+            <MiniMetric icon={<PackageCheck size={18} />} label={copy.home.deliveredToday} value={`${delivered}+`} />
+            <MiniMetric icon={<Bike size={18} />} label={copy.home.activeCouriers} value={String(onlineCouriers)} />
+            <MiniMetric icon={<Gauge size={18} />} label={copy.home.activeOrders} value={String(activeOrders)} />
           </div>
         </div>
-        <div className="hero-phone-card" aria-label="Previa mobile do motoboy">
+        <div className="hero-phone-card" aria-label={copy.home.mobilePreview}>
           <div className="phone-mock">
             <div className="phone-notch" />
             <div className="phone-photo"><Bike size={76} /></div>
-            <div className="phone-route"><span /> <strong>Entrega #8492</strong></div>
+            <div className="phone-route"><span /> <strong>{copy.home.previewOrder}</strong></div>
           </div>
         </div>
       </section>
 
       <section className="access-section">
-        <h2>Acesse seu ambiente</h2>
+        <h2>{copy.home.accessTitle}</h2>
         <div className="access-grid">
-          <AccessCard icon={<ShoppingBag size={18} />} title="Painel do Cliente" text="Crie e acompanhe o status dos seus pedidos em tempo real." action="Acessar portal" disabled={loading} onClick={() => login('client')} />
-          <AccessCard icon={<ShieldCheck size={18} />} title="Painel do Admin" text="Gerencie frota, faca o despacho e visualize relatorios operacionais." action="Acessar painel" disabled={loading} onClick={() => login('admin')} />
-          <AccessCard icon={<Smartphone size={18} />} title="Painel do Motoboy" text="Aceite rotas, confirme entregas e acompanhe seus ganhos diarios." action="Acessar entregas" disabled={loading} onClick={() => login('courier')} />
+          <AccessCard icon={<ShoppingBag size={18} />} title={copy.home.clientTitle} text={copy.home.clientText} action={copy.home.clientAction} disabled={loading} onClick={() => login('client')} />
+          <AccessCard icon={<ShieldCheck size={18} />} title={copy.home.adminTitle} text={copy.home.adminText} action={copy.home.adminAction} disabled={loading} onClick={() => login('admin')} />
+          <AccessCard icon={<Smartphone size={18} />} title={copy.home.courierTitle} text={copy.home.courierText} action={copy.home.courierAction} disabled={loading} onClick={() => login('courier')} />
         </div>
       </section>
-      <footer className="home-footer">© 2026 Motoboy Manager. Sistema focado em eficiencia logistica.</footer>
+      <footer className="home-footer">{copy.home.footer}</footer>
     </main>
   )
 }
 
 function LoginGate({ loading, login, navigate, role }: { loading: boolean; login: (role: Role) => void; navigate: (path: string) => void; role: Role }) {
+  const { copy } = useI18n()
   const labels: Record<Role, { eyebrow: string; title: string; action: string; icon: ReactNode }> = {
-    admin: { eyebrow: 'Acesso admin', title: 'Operations Dashboard', action: 'Entrar como admin de teste', icon: <ShieldCheck size={18} /> },
-    client: { eyebrow: 'Acesso cliente', title: 'Meu Painel', action: 'Entrar como cliente de teste', icon: <ShoppingBag size={18} /> },
-    courier: { eyebrow: 'Acesso motoboy', title: 'Entregas', action: 'Entrar como motoboy de teste', icon: <Bike size={18} /> },
+    admin: { ...copy.login.admin, icon: <ShieldCheck size={18} /> },
+    client: { ...copy.login.client, icon: <ShoppingBag size={18} /> },
+    courier: { ...copy.login.courier, icon: <Bike size={18} /> },
   }
 
   return (
@@ -386,7 +413,8 @@ function LoginGate({ loading, login, navigate, role }: { loading: boolean; login
         <button className="home-brand login-brand" onClick={() => navigate('/')} type="button"><Navigation size={18} /> Motoboy Manager</button>
         <span className="eyebrow">{labels[role].icon} {labels[role].eyebrow}</span>
         <h1>{labels[role].title}</h1>
-        <p>Use as credenciais de demo configuradas no Supabase para acessar este ambiente.</p>
+        <p>{copy.login.description}</p>
+        <LanguageSwitcher />
         <button className="button-primary full" disabled={loading} onClick={() => login(role)} type="button">{labels[role].action}</button>
       </section>
     </main>
@@ -406,6 +434,7 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
   snapshot: AppSnapshot
   user: SessionUser
 }) {
+  const { copy } = useI18n()
   const [tab, setTab] = useState<AdminTab>('dashboard')
   const [search, setSearch] = useState('')
   const filteredOrders = snapshot.orders.filter((order) => matchesOrder(order, search))
@@ -418,7 +447,7 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
     <main className="workspace-shell">
       <AdminSidebar active={tab} logout={logout} setActive={setTab} user={user} />
       <section className="workspace-main">
-        <WorkspaceTopbar search={search} setSearch={setSearch} title="Operations Dashboard" />
+        <WorkspaceTopbar search={search} setSearch={setSearch} title={copy.topbar.adminTitle} />
         {tab === 'dashboard' ? (
           <AdminDashboard
             activeOrders={activeOrders}
@@ -447,36 +476,39 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
 }
 
 function AdminSidebar({ active, logout, setActive, user }: { active: AdminTab; logout: () => void; setActive: (tab: AdminTab) => void; user: SessionUser }) {
+  const { copy } = useI18n()
   const items: Array<{ id: AdminTab; label: string; icon: ReactNode }> = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
-    { id: 'orders', label: 'Orders', icon: <ClipboardList size={15} /> },
-    { id: 'couriers', label: 'Couriers', icon: <Bike size={15} /> },
-    { id: 'clients', label: 'Clients', icon: <UsersRound size={15} /> },
-    { id: 'shops', label: 'Shops', icon: <Store size={15} /> },
-    { id: 'history', label: 'History', icon: <History size={15} /> },
+    { id: 'dashboard', label: copy.sidebar.dashboard, icon: <LayoutDashboard size={15} /> },
+    { id: 'orders', label: copy.sidebar.orders, icon: <ClipboardList size={15} /> },
+    { id: 'couriers', label: copy.sidebar.couriers, icon: <Bike size={15} /> },
+    { id: 'clients', label: copy.sidebar.clients, icon: <UsersRound size={15} /> },
+    { id: 'shops', label: copy.sidebar.shops, icon: <Store size={15} /> },
+    { id: 'history', label: copy.sidebar.history, icon: <History size={15} /> },
   ]
 
   return (
     <aside className="app-sidebar">
       <div className="sidebar-logo"><Navigation size={18} /> Motoboy Manager</div>
-      <div className="sidebar-user"><span><UserRound size={16} /></span><div><strong>{user.name}</strong><small>Central Hub</small></div></div>
-      <button className="sidebar-new" onClick={() => setActive('orders')} type="button"><Plus size={16} /> New Order</button>
+      <LanguageSwitcher compact />
+      <div className="sidebar-user"><span><UserRound size={16} /></span><div><strong>{user.name}</strong><small>{copy.sidebar.centralHub}</small></div></div>
+      <button className="sidebar-new" onClick={() => setActive('orders')} type="button"><Plus size={16} /> {copy.sidebar.newOrder}</button>
       <nav className="sidebar-nav" aria-label="Admin">
         {items.map((item) => (
           <button className={active === item.id ? 'active' : ''} key={item.id} onClick={() => setActive(item.id)} type="button">{item.icon}{item.label}</button>
         ))}
       </nav>
-      <button className="sidebar-logout" onClick={logout} type="button"><LogOut size={15} /> Sair</button>
+      <button className="sidebar-logout" onClick={logout} type="button"><LogOut size={15} /> {copy.sidebar.logout}</button>
     </aside>
   )
 }
 
 function WorkspaceTopbar({ search, setSearch, title }: { search: string; setSearch: (value: string) => void; title: string }) {
+  const { copy } = useI18n()
   return (
     <header className="workspace-topbar">
       <h1>{title}</h1>
-      <div className="workspace-search"><Search size={15} /><input placeholder="Search orders, couriers..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-      <button className="icon-button" aria-label="Notificacoes" type="button"><Bell size={16} /></button>
+      <div className="workspace-search"><Search size={15} /><input placeholder={copy.topbar.searchPlaceholder} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+      <button className="icon-button" aria-label={copy.topbar.notifications} type="button"><Bell size={16} /></button>
     </header>
   )
 }
@@ -493,25 +525,26 @@ function AdminDashboard({ activeOrders, assignOrder, deliveredToday, delayed, on
   setSelectedOrderId: (id: string) => void
   snapshot: AppSnapshot
 }) {
+  const { copy, locale } = useI18n()
   const pendingOrders = snapshot.orders.filter((order) => order.status === 'queued')
 
   return (
     <>
       <section className="kpi-grid">
-        <KpiCard icon={<PackageCheck size={16} />} label="Active Orders" value={String(activeOrders.length + 42)} />
-        <KpiCard icon={<Clock3 size={16} />} label="Pending Dispatch" value={String(pendingOrders.length + 12)} tone="amber" />
-        <KpiCard icon={<Bike size={16} />} label="Online Couriers" value={String(onlineCouriers.length + 18)} />
-        <KpiCard icon={<CheckCircle2 size={16} />} label="Delivered Today" value={String(deliveredToday)} />
-        <KpiCard icon={<AlertTriangle size={16} />} label="Delayed" value={String(delayed.length + 3)} tone="red" />
+        <KpiCard icon={<PackageCheck size={16} />} label={copy.admin.activeOrders} value={String(activeOrders.length + 42)} />
+        <KpiCard icon={<Clock3 size={16} />} label={copy.admin.pendingDispatch} value={String(pendingOrders.length + 12)} tone="amber" />
+        <KpiCard icon={<Bike size={16} />} label={copy.admin.onlineCouriers} value={String(onlineCouriers.length + 18)} />
+        <KpiCard icon={<CheckCircle2 size={16} />} label={copy.admin.deliveredToday} value={String(deliveredToday)} />
+        <KpiCard icon={<AlertTriangle size={16} />} label={copy.admin.delayed} value={String(delayed.length + 3)} tone="red" />
       </section>
       <section className="dashboard-content-grid">
         <div className="panel active-queue-panel">
-          <PanelTitle action={`${snapshot.orders.length + 42} Total`} title="Active Queue" />
+          <PanelTitle action={copy.admin.total(snapshot.orders.length + 42)} title={copy.admin.activeQueue} />
           <OrderQueue orders={snapshot.orders} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
         </div>
         <div className="panel map-panel">
-          <PanelTitle action={routePlan?.provider === 'osrm' ? 'Route synced' : 'Fallback ETA'} title="Live Operational Map" />
-          <MapCanvas locations={snapshot.locations} orders={snapshot.orders} routePlan={routePlan} selectedOrder={selectedOrder} />
+          <PanelTitle action={routePlan?.provider === 'osrm' ? copy.admin.routeSynced : copy.admin.fallbackEta} title={copy.admin.liveMap} />
+          <MapCanvas locale={locale} locations={snapshot.locations} orders={snapshot.orders} routePlan={routePlan} selectedOrder={selectedOrder} />
           {selectedOrder && !selectedOrder.assignedCourierId ? <AssignStrip assignOrder={assignOrder} couriers={snapshot.couriers} order={selectedOrder} /> : null}
         </div>
       </section>
@@ -528,33 +561,35 @@ function OrdersAdminView({ assignOrder, changeOrderStatus, orders, selectedOrder
   setSelectedOrderId: (id: string) => void
   snapshot: AppSnapshot
 }) {
+  const { copy, locale } = useI18n()
   return (
     <section className="admin-two-column">
       <div className="panel">
-        <PanelTitle action={`${orders.length} pedidos`} title="Orders" />
+        <PanelTitle action={copy.admin.ordersCount(orders.length)} title={copy.admin.ordersTitle} />
         <OrderQueue orders={orders} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
       </div>
       <div className="panel detail-admin-panel">
         {selectedOrder ? (
           <>
-            <span className={`status-pill ${selectedOrder.status}`}>{statusLabel(selectedOrder.status)}</span>
+            <span className={`status-pill ${selectedOrder.status}`}>{statusLabel(selectedOrder.status, locale)}</span>
             <h2>{selectedOrder.number} - {selectedOrder.customerName}</h2>
             <p>{selectedOrder.pickupAddress}</p>
             <p>{selectedOrder.destinationAddress}</p>
-            <div className="detail-metrics"><span>{formatCurrency(selectedOrder.totalCents)}</span><span>{selectedOrder.items.length} item(ns)</span></div>
+            <div className="detail-metrics"><span>{formatCurrency(selectedOrder.totalCents, locale)}</span><span>{copy.admin.itemCount(selectedOrder.items.length)}</span></div>
             {!selectedOrder.assignedCourierId ? <AssignStrip assignOrder={assignOrder} couriers={snapshot.couriers} order={selectedOrder} /> : null}
             <div className="action-row">
-              <button className="button-soft" onClick={() => changeOrderStatus(selectedOrder, 'delayed')} type="button"><AlertTriangle size={15} /> Marcar atraso</button>
-              <button className="button-danger" onClick={() => changeOrderStatus(selectedOrder, 'cancelled')} type="button"><XCircle size={15} /> Cancelar</button>
+              <button className="button-soft" onClick={() => changeOrderStatus(selectedOrder, 'delayed')} type="button"><AlertTriangle size={15} /> {copy.admin.markDelayed}</button>
+              <button className="button-danger" onClick={() => changeOrderStatus(selectedOrder, 'cancelled')} type="button"><XCircle size={15} /> {copy.admin.cancel}</button>
             </div>
           </>
-        ) : <EmptyBlock title="Selecione um pedido" text="Abra um pedido da fila para despachar ou editar status." />}
+        ) : <EmptyBlock title={copy.admin.selectOrderTitle} text={copy.admin.selectOrderText} />}
       </div>
     </section>
   )
 }
 
 function CouriersAdminView({ couriers, orders, setCourierStatus }: { couriers: Courier[]; orders: Order[]; setCourierStatus: (courier: Courier, status: CourierStatus) => void }) {
+  const { copy, locale } = useI18n()
   return (
     <section className="cards-grid-view">
       {couriers.map((courier) => {
@@ -565,10 +600,10 @@ function CouriersAdminView({ couriers, orders, setCourierStatus }: { couriers: C
             <h2>{courier.name}</h2>
             <p>{courier.phone}</p>
             <p>{courier.vehicle} · {courier.plate}</p>
-            <div className="detail-metrics"><span>{courierStatusLabel(courier.status)}</span><span>{active} ativa(s)</span><span>★ {courier.rating}</span></div>
+            <div className="detail-metrics"><span>{courierStatusLabel(courier.status, locale)}</span><span>{copy.admin.activeCount(active)}</span><span>★ {courier.rating}</span></div>
             <div className="action-row">
-              <button className="button-soft" onClick={() => setCourierStatus(courier, 'available')} type="button">Disponivel</button>
-              <button className="button-soft" onClick={() => setCourierStatus(courier, 'offline')} type="button">Offline</button>
+              <button className="button-soft" onClick={() => setCourierStatus(courier, 'available')} type="button">{copy.admin.available}</button>
+              <button className="button-soft" onClick={() => setCourierStatus(courier, 'offline')} type="button">{copy.admin.offline}</button>
             </div>
           </article>
         )
@@ -578,6 +613,7 @@ function CouriersAdminView({ couriers, orders, setCourierStatus }: { couriers: C
 }
 
 function ClientsAdminView({ orders, profiles }: { orders: Order[]; profiles: Profile[] }) {
+  const { copy } = useI18n()
   const clients = profiles.filter((profile) => profile.role === 'client')
   return (
     <section className="cards-grid-view">
@@ -588,7 +624,7 @@ function ClientsAdminView({ orders, profiles }: { orders: Order[]; profiles: Pro
             <span className="entity-icon"><UsersRound size={18} /></span>
             <h2>{client.name}</h2>
             <p>{client.email}</p>
-            <div className="detail-metrics"><span>{clientOrders.length} pedido(s)</span><span>{clientOrders.filter((order) => activeStatuses.includes(order.status)).length} ativo(s)</span></div>
+            <div className="detail-metrics"><span>{copy.admin.clientOrderCount(clientOrders.length)}</span><span>{copy.admin.activeCount(clientOrders.filter((order) => activeStatuses.includes(order.status)).length)}</span></div>
           </article>
         )
       })}
@@ -597,17 +633,18 @@ function ClientsAdminView({ orders, profiles }: { orders: Order[]; profiles: Pro
 }
 
 function ShopsAdminView({ saveShop, shops }: { saveShop: (input: ShopInput, shopId?: string) => Promise<void>; shops: Shop[] }) {
+  const { copy } = useI18n()
   return (
     <section className="admin-two-column shops-layout">
       <ShopForm saveShop={saveShop} />
       <div className="panel">
-        <PanelTitle action={`${shops.length} lojas`} title="Shops" />
+        <PanelTitle action={copy.admin.shopsCount(shops.length)} title={copy.admin.shopsTitle} />
         <div className="entity-list">
           {shops.map((shop) => (
             <article className="shop-row" key={shop.id}>
               <span className="entity-icon"><Store size={17} /></span>
               <div><strong>{shop.name}</strong><small>{shop.address}</small><small>{shop.contactName} · {shop.phone}</small></div>
-              <button className="button-soft" onClick={() => void saveShop({ ...shop, active: !shop.active }, shop.id)} type="button">{shop.active ? 'Ativa' : 'Inativa'}</button>
+              <button className="button-soft" onClick={() => void saveShop({ ...shop, active: !shop.active }, shop.id)} type="button">{shop.active ? copy.admin.shopActive : copy.admin.shopInactive}</button>
             </article>
           ))}
         </div>
@@ -617,10 +654,18 @@ function ShopsAdminView({ saveShop, shops }: { saveShop: (input: ShopInput, shop
 }
 
 function ShopForm({ saveShop }: { saveShop: (input: ShopInput, shopId?: string) => Promise<void> }) {
-  const [name, setName] = useState('Nova loja')
+  const { copy } = useI18n()
+  const [name, setName] = useState(copy.admin.shopFormTitle)
   const [address, setAddress] = useState('Rua Haddock Lobo, 500 - Sao Paulo')
-  const [contactName, setContactName] = useState('Contato')
+  const [contactName, setContactName] = useState(copy.admin.contact)
+  const previousShopDefaults = useRef({ contactName: copy.admin.contact, name: copy.admin.shopFormTitle })
   const [phone, setPhone] = useState('+55 11 3000-0000')
+
+  useEffect(() => {
+    if (name === previousShopDefaults.current.name) setName(copy.admin.shopFormTitle)
+    if (contactName === previousShopDefaults.current.contactName) setContactName(copy.admin.contact)
+    previousShopDefaults.current = { contactName: copy.admin.contact, name: copy.admin.shopFormTitle }
+  }, [contactName, copy.admin.contact, copy.admin.shopFormTitle, name])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -629,28 +674,29 @@ function ShopForm({ saveShop }: { saveShop: (input: ShopInput, shopId?: string) 
 
   return (
     <form className="panel order-form" onSubmit={(event) => void submit(event)}>
-      <PanelTitle action="Cadastro" title="Nova loja" />
-      <label>Nome<input value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label>Endereco<input value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-      <label>Contato<input value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
-      <label>Telefone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-      <button className="button-primary full" type="submit"><PlusCircle size={16} /> Salvar loja</button>
+      <PanelTitle action={copy.admin.registration} title={copy.admin.shopFormTitle} />
+      <label>{copy.admin.name}<input value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.address}<input value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+      <label>{copy.admin.contact}<input value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
+      <label>{copy.admin.phone}<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+      <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveShop}</button>
     </form>
   )
 }
 
 function HistoryAdminView({ events, orders }: { events: DeliveryEvent[]; orders: Order[] }) {
+  const { copy, locale } = useI18n()
   return (
     <section className="panel history-panel">
-      <PanelTitle action={`${events.length} eventos`} title="History" />
+      <PanelTitle action={copy.admin.eventsCount(events.length)} title={copy.admin.historyTitle} />
       <div className="timeline-list">
         {events.map((event) => {
           const order = orders.find((item) => item.id === event.orderId)
           return (
             <article className="timeline-row" key={event.id}>
-              <span className={`status-pill ${event.status}`}>{statusLabel(event.status)}</span>
-              <div><strong>{order?.number ?? 'Pedido'} · {event.actorName}</strong><p>{event.message}</p></div>
-              <time>{new Date(event.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
+              <span className={`status-pill ${event.status}`}>{statusLabel(event.status, locale)}</span>
+              <div><strong>{order?.number ?? copy.courier.order} · {event.actorName}</strong><p>{copy.admin.historyMessage(statusLabel(event.status, locale))}</p></div>
+              <time>{new Date(event.createdAt).toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
             </article>
           )
         })}
@@ -668,15 +714,22 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
   setSelectedOrderId: (id: string) => void
   snapshot: AppSnapshot
 }) {
+  const { copy } = useI18n()
   const activeShops = snapshot.shops.filter((shop) => shop.active)
   const [shopId, setShopId] = useState(activeShops[0]?.id ?? '')
   const [destinationIndex, setDestinationIndex] = useState('0')
-  const [itemName, setItemName] = useState('Pedido de teste')
+  const [itemName, setItemName] = useState(copy.client.defaultItem)
+  const previousDefaultItem = useRef(copy.client.defaultItem)
   const [phone, setPhone] = useState('+55 11 90000-1001')
   const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === session.id)
   const selectedOrder = clientOrders.find((order) => order.id === selectedOrderId) ?? clientOrders[0] ?? null
   const selectedLocation = selectedOrder ? (snapshot.locations.find((location) => location.orderId === selectedOrder.id || location.courierId === selectedOrder.assignedCourierId) ?? null) : null
   const eta = selectedOrder && selectedLocation ? estimateEtaFromLocation(selectedLocation, selectedOrder.destination) : routePlan?.etaMinutes ?? selectedOrder?.etaMinutes ?? 0
+
+  useEffect(() => {
+    if (itemName === previousDefaultItem.current) setItemName(copy.client.defaultItem)
+    previousDefaultItem.current = copy.client.defaultItem
+  }, [copy.client.defaultItem, itemName])
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -694,35 +747,36 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
       pickup: { lat: shop.lat, lng: shop.lng },
       destination: destination.point,
       totalCents: 6990,
-      items: [{ name: itemName || 'Pedido de teste', quantity: 1 }],
+      items: [{ name: itemName || copy.client.defaultItem, quantity: 1 }],
     })
-    setItemName('Pedido de teste')
+    setItemName(copy.client.defaultItem)
   }
 
   return (
     <main className="workspace-shell client-shell">
       <aside className="app-sidebar">
         <div className="sidebar-logo"><Navigation size={18} /> Motoboy Manager</div>
-        <div className="sidebar-user"><span><UserRound size={16} /></span><div><strong>{session.name}</strong><small>Cliente</small></div></div>
-        <button className="sidebar-new" type="button"><Plus size={16} /> Novo Pedido</button>
-        <nav className="sidebar-nav"><button className="active" type="button"><LayoutDashboard size={15} /> Dashboard</button><button type="button"><ClipboardList size={15} /> Orders</button></nav>
-        <button className="sidebar-logout" onClick={logout} type="button"><LogOut size={15} /> Sair</button>
+        <LanguageSwitcher compact />
+        <div className="sidebar-user"><span><UserRound size={16} /></span><div><strong>{session.name}</strong><small>{copy.sidebar.clientRole}</small></div></div>
+        <button className="sidebar-new" type="button"><Plus size={16} /> {copy.client.newOrder}</button>
+        <nav className="sidebar-nav"><button className="active" type="button"><LayoutDashboard size={15} /> {copy.sidebar.dashboard}</button><button type="button"><ClipboardList size={15} /> {copy.client.ordersNav}</button></nav>
+        <button className="sidebar-logout" onClick={logout} type="button"><LogOut size={15} /> {copy.sidebar.logout}</button>
       </aside>
       <section className="workspace-main client-main">
-        <WorkspaceTopbar search="" setSearch={() => undefined} title="Meus Pedidos" />
+        <WorkspaceTopbar search="" setSearch={() => undefined} title={copy.topbar.clientTitle} />
         <div className="client-content-grid">
           <div className="panel client-orders-panel">
-            <PanelTitle action="Pedidos Ativos" title="Meus Pedidos" />
+            <PanelTitle action={copy.client.activeOrders} title={copy.topbar.clientTitle} />
             <OrderQueue orders={clientOrders} selectedOrderId={selectedOrder?.id ?? ''} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
           </div>
           <form className="panel order-form request-panel" onSubmit={(event) => void submitOrder(event)}>
-            <PanelTitle action="Online" title="Solicitar Nova Entrega" />
-            <label>Origem (Loja)<select value={shopId} onChange={(event) => setShopId(event.target.value)}>{activeShops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
-            <label>Destino<select value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>{destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}</select></label>
-            <label>Item / Observacoes<input value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
-            <label>Celular<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-            <button className="button-primary full" type="submit"><PlusCircle size={16} /> Criar pedido</button>
-            {selectedOrder ? <ClientOrderPreview eta={eta} order={selectedOrder} routePlan={routePlan} selectedLocation={selectedLocation} /> : <EmptyBlock title="Nenhum pedido" text="Crie uma entrega para visualizar mapa e ETA." />}
+            <PanelTitle action={copy.client.online} title={copy.client.requestTitle} />
+            <label>{copy.client.origin}<select value={shopId} onChange={(event) => setShopId(event.target.value)}>{activeShops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
+            <label>{copy.client.destination}<select value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>{destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}</select></label>
+            <label>{copy.client.item}<input value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
+            <label>{copy.client.phone}<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+            <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.client.createOrder}</button>
+            {selectedOrder ? <ClientOrderPreview eta={eta} order={selectedOrder} routePlan={routePlan} selectedLocation={selectedLocation} /> : <EmptyBlock title={copy.client.emptyTitle} text={copy.client.emptyText} />}
           </form>
         </div>
       </section>
@@ -731,11 +785,12 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
 }
 
 function ClientOrderPreview({ eta, order, routePlan, selectedLocation }: { eta: number; order: Order; routePlan: RoutePlan | null; selectedLocation: CourierLocation | null }) {
+  const { copy, locale } = useI18n()
   return (
     <div className="client-preview">
-      <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
-      <MapCanvas height="320px" locations={selectedLocation ? [selectedLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} />
-      <div className="detail-metrics"><span>{order.assignedCourierId ? `ETA ${eta} min` : 'Aguardando admin'}</span><span>{formatCurrency(order.totalCents)}</span></div>
+      <span className={`status-pill ${order.status}`}>{statusLabel(order.status, locale)}</span>
+      <MapCanvas height="320px" locale={locale} locations={selectedLocation ? [selectedLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} />
+      <div className="detail-metrics"><span>{order.assignedCourierId ? copy.courier.eta(eta) : copy.client.awaitingAdmin}</span><span>{formatCurrency(order.totalCents, locale)}</span></div>
     </div>
   )
 }
@@ -749,6 +804,7 @@ function CourierPage({ applyLocation, changeOrderStatus, logout, routePlan, sess
   showNotice: (message: string) => void
   snapshot: AppSnapshot
 }) {
+  const { copy, locale } = useI18n()
   const courier = snapshot.couriers.find((item) => item.profileId === session.id) ?? snapshot.couriers[0]
   const order = snapshot.orders.find((item) => item.assignedCourierId === courier?.id && activeStatuses.includes(item.status)) ?? null
   const currentLocation = courier ? snapshot.locations.find((item) => item.courierId === courier.id) ?? null : null
@@ -775,13 +831,13 @@ function CourierPage({ applyLocation, changeOrderStatus, logout, routePlan, sess
 
   function startGps() {
     if (!navigator.geolocation || !courier || !order) {
-      showNotice('Geolocalizacao nao disponivel neste navegador.')
+      showNotice(copy.notice.geoUnavailable)
       return
     }
 
     watchRef.current = navigator.geolocation.watchPosition(
       (position) => applyLocation({ courierId: courier.id, orderId: order.id, lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy, speed: position.coords.speed, heading: position.coords.heading, battery: null, recordedAt: new Date().toISOString() }),
-      () => showNotice('Permissao de localizacao negada ou indisponivel.'),
+      () => showNotice(copy.notice.geoDenied),
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 },
     )
     setGpsActive(true)
@@ -800,7 +856,7 @@ function CourierPage({ applyLocation, changeOrderStatus, logout, routePlan, sess
   if (!courier || !order) {
     return (
       <main className="courier-stage">
-        <section className="courier-phone empty-courier"><div className="mobile-top"><strong>Motoboy Manager</strong><button onClick={logout} type="button"><LogOut size={14} /></button></div><h1>Nenhuma entrega ativa</h1><p>Quando o admin atribuir um pedido, ele aparece aqui.</p></section>
+        <section className="courier-phone empty-courier"><div className="mobile-top"><strong>Motoboy Manager</strong><div className="mobile-actions"><LanguageSwitcher compact /><button onClick={logout} type="button"><LogOut size={14} /></button></div></div><h1>{copy.courier.noActiveTitle}</h1><p>{copy.courier.noActiveText}</p></section>
       </main>
     )
   }
@@ -811,18 +867,18 @@ function CourierPage({ applyLocation, changeOrderStatus, logout, routePlan, sess
   return (
     <main className="courier-stage">
       <section className="courier-phone">
-        <div className="mobile-top"><strong>Motoboy Manager</strong><button onClick={logout} type="button"><LogOut size={14} /></button></div>
-        <div className="mobile-map"><MapCanvas height="260px" locations={currentLocation ? [currentLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} /></div>
+        <div className="mobile-top"><strong>Motoboy Manager</strong><div className="mobile-actions"><LanguageSwitcher compact /><button onClick={logout} type="button"><LogOut size={14} /></button></div></div>
+        <div className="mobile-map"><MapCanvas height="260px" locale={locale} locations={currentLocation ? [currentLocation] : []} orders={[order]} routePlan={routePlan} selectedOrder={order} /></div>
         <div className="delivery-ticket">
-          <div><span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span><strong>Pedido {order.number}</strong><small>Cliente: {order.customerName}</small></div>
-          <strong>{formatCurrency(order.totalCents)}</strong>
+          <div><span className={`status-pill ${order.status}`}>{statusLabel(order.status, locale)}</span><strong>{copy.courier.order} {order.number}</strong><small>{copy.courier.client}: {order.customerName}</small></div>
+          <strong>{formatCurrency(order.totalCents, locale)}</strong>
         </div>
-        <div className="route-steps"><Step title="Retirada" text={order.pickupAddress} /><Step title="Entrega" text={order.destinationAddress} muted /></div>
+        <div className="route-steps"><Step title={copy.courier.pickup} text={order.pickupAddress} /><Step title={copy.courier.dropoff} text={order.destinationAddress} muted /></div>
         <div className="courier-actions">
-          {nextStatus ? <button className="button-primary full" onClick={() => changeOrderStatus(order, nextStatus, courier.name)} type="button"><PackageCheck size={16} /> {nextStatusLabel(nextStatus)}</button> : null}
-          <button className="button-soft" onClick={gpsActive ? stopGps : startGps} type="button"><Radio size={16} /> {gpsActive ? 'Parar GPS' : 'GPS real'}</button>
-          <button className="button-soft" onClick={() => setSimulating((current) => !current)} type="button"><Play size={16} /> {simulating ? 'Parar demo' : 'Simular rota'}</button>
-          <span className="eta-chip"><Clock3 size={14} /> ETA {eta} min</span>
+          {nextStatus ? <button className="button-primary full" onClick={() => changeOrderStatus(order, nextStatus, courier.name)} type="button"><PackageCheck size={16} /> {nextStatusLabel(nextStatus, copy, locale)}</button> : null}
+          <button className="button-soft" onClick={gpsActive ? stopGps : startGps} type="button"><Radio size={16} /> {gpsActive ? copy.courier.gpsStop : copy.courier.gpsStart}</button>
+          <button className="button-soft" onClick={() => setSimulating((current) => !current)} type="button"><Play size={16} /> {simulating ? copy.courier.simulateStop : copy.courier.simulateStart}</button>
+          <span className="eta-chip"><Clock3 size={14} /> {copy.courier.eta(eta)}</span>
         </div>
       </section>
     </main>
@@ -830,16 +886,17 @@ function CourierPage({ applyLocation, changeOrderStatus, logout, routePlan, sess
 }
 
 function OrderQueue({ orders, selectedOrderId, setSelectedOrderId, snapshot }: { orders: Order[]; selectedOrderId: string; setSelectedOrderId: (id: string) => void; snapshot: AppSnapshot }) {
+  const { copy, locale } = useI18n()
   return (
     <div className="queue-list">
       {orders.map((order) => {
         const courier = snapshot.couriers.find((item) => item.id === order.assignedCourierId)
         return (
           <button className={`queue-card ${selectedOrderId === order.id ? 'active' : ''}`} key={order.id} onClick={() => setSelectedOrderId(order.id)} type="button">
-            <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+            <span className={`status-pill ${order.status}`}>{statusLabel(order.status, locale)}</span>
             <strong>{order.number}</strong>
             <small>{order.merchantName} · {shortAddress(order.destinationAddress)}</small>
-            <span><MapPin size={13} /> {courier?.name ?? 'Sem motoboy'} · ETA {order.etaMinutes || '—'} min</span>
+            <span><MapPin size={13} /> {courier?.name ?? copy.queue.noCourier} · {copy.courier.eta(order.etaMinutes || 0).replace('0 min', '— min')}</span>
           </button>
         )
       })}
@@ -848,10 +905,11 @@ function OrderQueue({ orders, selectedOrderId, setSelectedOrderId, snapshot }: {
 }
 
 function AssignStrip({ assignOrder, couriers, order }: { assignOrder: (order: Order, courierId: string) => void; couriers: Courier[]; order: Order }) {
+  const { copy } = useI18n()
   const available = couriers.filter((courier) => courier.status !== 'offline')
   return (
     <div className="assign-strip">
-      {available.map((courier) => <button className="button-assign" key={courier.id} onClick={() => assignOrder(order, courier.id)} type="button">Atribuir {courier.name.split(' ')[0]}</button>)}
+      {available.map((courier) => <button className="button-assign" key={courier.id} onClick={() => assignOrder(order, courier.id)} type="button">{copy.queue.assign(courier.name.split(' ')[0])}</button>)}
     </div>
   )
 }
@@ -880,6 +938,22 @@ function Step({ muted, text, title }: { muted?: boolean; text: string; title: st
   return <div className={`route-step ${muted ? 'muted' : ''}`}><span /><div><strong>{title}</strong><p>{text}</p></div></div>
 }
 
+function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
+  const { copy, locale, setLocale } = useI18n()
+  return (
+    <div className={`language-switcher ${compact ? 'compact' : ''}`} aria-label={copy.language.label}>
+      <button aria-pressed={locale === 'pt-BR'} className={locale === 'pt-BR' ? 'active' : ''} onClick={() => setLocale('pt-BR')} type="button">{copy.language.pt}</button>
+      <button aria-pressed={locale === 'en'} className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')} type="button">{copy.language.en}</button>
+    </div>
+  )
+}
+
+function useI18n() {
+  const context = useContext(I18nContext)
+  if (!context) throw new Error('I18n context is not available.')
+  return context
+}
+
 function getNextStatus(status: DeliveryStatus): DeliveryStatus | null {
   if (status === 'assigned') return 'pickup'
   if (status === 'pickup') return 'in_transit'
@@ -887,11 +961,11 @@ function getNextStatus(status: DeliveryStatus): DeliveryStatus | null {
   return null
 }
 
-function nextStatusLabel(status: DeliveryStatus) {
-  if (status === 'pickup') return 'Cheguei na retirada'
-  if (status === 'in_transit') return 'Sair para entrega'
-  if (status === 'delivered') return 'Finalizar entrega'
-  return statusLabel(status)
+function nextStatusLabel(status: DeliveryStatus, copy: Copy, locale: Locale) {
+  if (status === 'pickup') return copy.courier.arrivedPickup
+  if (status === 'in_transit') return copy.courier.startDelivery
+  if (status === 'delivered') return copy.courier.finishDelivery
+  return statusLabel(status, locale)
 }
 
 function matchesOrder(order: Order, search: string) {
@@ -902,6 +976,13 @@ function matchesOrder(order: Order, search: string) {
 
 function shortAddress(address: string) {
   return address.split(',').slice(0, 2).join(',')
+}
+
+function readLocale(): Locale {
+  const saved = window.localStorage.getItem('motoboy-manager-locale')
+  if (isLocale(saved)) return saved
+
+  return window.navigator.language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en'
 }
 
 function readRoute(): RouteState {

@@ -862,6 +862,47 @@ button:disabled {
   gap: 6px;
 }
 
+.language-switcher {
+  align-items: center;
+  background: rgba(16, 33, 27, 0.07);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+}
+
+.language-switcher button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 950;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.language-switcher button.active {
+  background: var(--dark);
+  color: #fffaf0;
+}
+
+.language-switcher.compact {
+  background: rgba(255, 250, 240, 0.08);
+  border-color: rgba(255, 250, 240, 0.14);
+  width: max-content;
+}
+
+.language-switcher.compact button {
+  color: rgba(255, 250, 240, 0.66);
+}
+
+.language-switcher.compact button.active {
+  background: var(--amber);
+  color: #201408;
+}
+
 .home-topbar a,
 .home-topbar nav button {
   background: transparent;
@@ -1594,6 +1635,26 @@ button:disabled {
   align-items: center;
   display: flex;
   justify-content: space-between;
+}
+
+.mobile-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.mobile-actions .language-switcher.compact {
+  background: rgba(16, 33, 27, 0.06);
+  border-color: var(--line);
+}
+
+.mobile-actions .language-switcher.compact button {
+  color: var(--muted);
+}
+
+.mobile-actions .language-switcher.compact button.active {
+  background: var(--dark);
+  color: #fffaf0;
 }
 
 .mobile-top button {
