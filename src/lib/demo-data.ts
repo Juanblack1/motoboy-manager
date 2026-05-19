@@ -1,4 +1,4 @@
-import type { AppSnapshot, Courier, CourierLocation, DeliveryEvent, Order, Profile, Shop } from '../types'
+import type { AppSnapshot, Courier, CourierLocation, Customer, DeliveryEvent, Order, Product, Profile, Shop, StaffMember } from '../types'
 
 const now = new Date()
 
@@ -56,6 +56,48 @@ export const demoCouriers: Courier[] = [
   },
 ]
 
+export const demoCustomers: Customer[] = [
+  {
+    id: 'customer-camila',
+    name: 'Camila Torres',
+    email: 'cliente@motoboy.demo',
+    phone: '+55 11 90000-1001',
+    address: 'Rua Oscar Freire, 620 - Jardins, Sao Paulo',
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 26).toISOString(),
+  },
+  {
+    id: 'customer-bruno',
+    name: 'Bruno Martins',
+    email: 'bruno@motoboy.demo',
+    phone: '+55 11 90000-1002',
+    address: 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo',
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 12).toISOString(),
+  },
+]
+
+export const demoStaffMembers: StaffMember[] = [
+  {
+    id: 'staff-marina',
+    name: 'Marina Alves',
+    email: 'admin@motoboy.demo',
+    phone: '+55 11 98888-9000',
+    role: 'admin',
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 30).toISOString(),
+  },
+  {
+    id: 'staff-otavio',
+    name: 'Otavio Lima',
+    email: 'dispatch@motoboy.demo',
+    phone: '+55 11 97777-9090',
+    role: 'dispatcher',
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 8).toISOString(),
+  },
+]
+
 export const demoShops: Shop[] = [
   {
     id: 'shop-bistro-avenida',
@@ -90,6 +132,13 @@ export const demoShops: Shop[] = [
     active: true,
     createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString(),
   },
+]
+
+export const demoProducts: Product[] = [
+  { id: 'product-bistro-combo', shopId: 'shop-bistro-avenida', name: 'Combo executivo', category: 'Refeicao', priceCents: 4490, active: true, createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 20).toISOString() },
+  { id: 'product-bistro-suco', shopId: 'shop-bistro-avenida', name: 'Suco natural', category: 'Bebidas', priceCents: 1200, active: true, createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 20).toISOString() },
+  { id: 'product-mercado-compras', shopId: 'shop-mercado-central', name: 'Compras de mercado', category: 'Mercado', priceCents: 12990, active: true, createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 18).toISOString() },
+  { id: 'product-farmacia-kit', shopId: 'shop-farmacia-jardins', name: 'Pedido farmacia', category: 'Saude', priceCents: 5290, active: true, createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString() },
 ]
 
 export const demoOrders: Order[] = [
@@ -210,7 +259,10 @@ export const demoEvents: DeliveryEvent[] = [
 export const demoSnapshot: AppSnapshot = {
   profiles: demoProfiles,
   couriers: demoCouriers,
+  customers: demoCustomers,
   shops: demoShops,
+  products: demoProducts,
+  staffMembers: demoStaffMembers,
   orders: demoOrders,
   locations: demoLocations,
   events: demoEvents,

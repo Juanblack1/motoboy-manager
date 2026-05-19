@@ -10,13 +10,35 @@ create table if not exists public.profiles (
 
 create table if not exists public.couriers (
   id uuid primary key default gen_random_uuid(),
-  profile_id uuid not null references public.profiles(id) on delete cascade,
+  profile_id uuid references public.profiles(id) on delete set null,
   name text not null,
   phone text not null,
   vehicle text not null,
   plate text not null,
   rating numeric(3,2) not null default 5,
   status text not null default 'offline' check (status in ('available', 'busy', 'offline')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.couriers alter column profile_id drop not null;
+
+create table if not exists public.customers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  phone text not null,
+  address text not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.staff_members (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  phone text not null,
+  role text not null default 'dispatcher' check (role in ('admin', 'dispatcher', 'support')),
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -28,6 +50,16 @@ create table if not exists public.shops (
   phone text not null,
   lat double precision not null,
   lng double precision not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  name text not null,
+  category text not null default 'Geral',
+  price_cents integer not null default 0,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -85,11 +117,18 @@ create index if not exists orders_assigned_courier_id_idx on public.orders(assig
 create index if not exists orders_client_profile_id_idx on public.orders(client_profile_id);
 create index if not exists orders_public_code_idx on public.orders(public_code);
 create index if not exists shops_active_idx on public.shops(active);
+create index if not exists products_shop_id_idx on public.products(shop_id);
+create index if not exists products_active_idx on public.products(active);
+create index if not exists customers_email_idx on public.customers(email);
+create index if not exists staff_members_email_idx on public.staff_members(email);
 create index if not exists delivery_events_order_id_idx on public.delivery_events(order_id);
 
 alter table public.profiles enable row level security;
 alter table public.couriers enable row level security;
+alter table public.customers enable row level security;
+alter table public.staff_members enable row level security;
 alter table public.shops enable row level security;
+alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.delivery_events enable row level security;
 alter table public.courier_locations enable row level security;
@@ -236,6 +275,18 @@ for all to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+drop policy if exists "customers admin manage" on public.customers;
+create policy "customers admin manage" on public.customers
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "staff members admin manage" on public.staff_members;
+create policy "staff members admin manage" on public.staff_members
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
 drop policy if exists "shops read active or admin" on public.shops;
 create policy "shops read active or admin" on public.shops
 for select to authenticated
@@ -243,6 +294,17 @@ using (active or public.is_admin());
 
 drop policy if exists "shops admin manage" on public.shops;
 create policy "shops admin manage" on public.shops
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "products read active or admin" on public.products;
+create policy "products read active or admin" on public.products
+for select to authenticated
+using (active or public.is_admin());
+
+drop policy if exists "products admin manage" on public.products;
+create policy "products admin manage" on public.products
 for all to authenticated
 using (public.is_admin())
 with check (public.is_admin());
@@ -356,5 +418,23 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table public.shops;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.products;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.customers;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.staff_members;
 exception when duplicate_object then null;
 end $$;

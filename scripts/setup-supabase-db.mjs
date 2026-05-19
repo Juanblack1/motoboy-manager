@@ -45,6 +45,14 @@ const ids = {
   shopBistro: '44444444-4444-4444-8444-444444444441',
   shopMercado: '44444444-4444-4444-8444-444444444442',
   shopFarmacia: '44444444-4444-4444-8444-444444444443',
+  productBistroCombo: '55555555-5555-4555-8555-555555555551',
+  productBistroSuco: '55555555-5555-4555-8555-555555555552',
+  productMercado: '55555555-5555-4555-8555-555555555553',
+  productFarmacia: '55555555-5555-4555-8555-555555555554',
+  customerCamila: '66666666-6666-4666-8666-666666666661',
+  customerBruno: '66666666-6666-4666-8666-666666666662',
+  staffMarina: '77777777-7777-4777-8777-777777777771',
+  staffOtavio: '77777777-7777-4777-8777-777777777772',
   order1001: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1001',
   order1002: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1002',
   order1003: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1003',
@@ -192,8 +200,8 @@ async function seedOperationalData(adminUser, courierUser, clientUser) {
     `insert into public.couriers (id, profile_id, name, phone, vehicle, plate, rating, status)
      values
        ($1, $2, 'Rafael Motta', '+55 11 98888-0101', 'Honda CG 160', 'RTA-4B22', 4.92, 'busy'),
-       ($3, $4, 'Luiza Neri', '+55 11 97777-2020', 'Yamaha Factor', 'LZN-8C19', 4.87, 'available'),
-       ($5, $4, 'Diego Ramos', '+55 11 96666-3030', 'Honda Biz', 'DGR-2A71', 4.75, 'offline')
+        ($3, null, 'Luiza Neri', '+55 11 97777-2020', 'Yamaha Factor', 'LZN-8C19', 4.87, 'available'),
+        ($4, null, 'Diego Ramos', '+55 11 96666-3030', 'Honda Biz', 'DGR-2A71', 4.75, 'offline')
      on conflict (id) do update
      set profile_id = excluded.profile_id,
          name = excluded.name,
@@ -202,7 +210,7 @@ async function seedOperationalData(adminUser, courierUser, clientUser) {
          plate = excluded.plate,
          rating = excluded.rating,
          status = excluded.status`,
-    [ids.courierRafael, courierUser.id, ids.courierLuiza, adminUser.id, ids.courierDiego],
+    [ids.courierRafael, courierUser.id, ids.courierLuiza, ids.courierDiego],
   )
 
   await client.query(
@@ -220,6 +228,50 @@ async function seedOperationalData(adminUser, courierUser, clientUser) {
          lng = excluded.lng,
          active = excluded.active`,
     [ids.shopBistro, ids.shopMercado, ids.shopFarmacia],
+  )
+
+  await client.query(
+    `insert into public.products (id, shop_id, name, category, price_cents, active)
+     values
+       ($1, $2, 'Combo executivo', 'Refeicao', 4490, true),
+       ($3, $2, 'Suco natural', 'Bebidas', 1200, true),
+       ($4, $5, 'Compras de mercado', 'Mercado', 12990, true),
+       ($6, $7, 'Pedido farmacia', 'Saude', 5290, true)
+     on conflict (id) do update
+     set shop_id = excluded.shop_id,
+         name = excluded.name,
+         category = excluded.category,
+         price_cents = excluded.price_cents,
+         active = excluded.active`,
+    [ids.productBistroCombo, ids.shopBistro, ids.productBistroSuco, ids.productMercado, ids.shopMercado, ids.productFarmacia, ids.shopFarmacia],
+  )
+
+  await client.query(
+    `insert into public.customers (id, name, email, phone, address, active)
+     values
+       ($1, 'Camila Torres', 'cliente@motoboy.demo', '+55 11 90000-1001', 'Rua Oscar Freire, 620 - Jardins, Sao Paulo', true),
+       ($2, 'Bruno Martins', 'bruno@motoboy.demo', '+55 11 90000-1002', 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo', true)
+     on conflict (id) do update
+     set name = excluded.name,
+         email = excluded.email,
+         phone = excluded.phone,
+         address = excluded.address,
+         active = excluded.active`,
+    [ids.customerCamila, ids.customerBruno],
+  )
+
+  await client.query(
+    `insert into public.staff_members (id, name, email, phone, role, active)
+     values
+       ($1, 'Marina Alves', 'admin@motoboy.demo', '+55 11 98888-9000', 'admin', true),
+       ($2, 'Otavio Lima', 'dispatch@motoboy.demo', '+55 11 97777-9090', 'dispatcher', true)
+     on conflict (id) do update
+     set name = excluded.name,
+         email = excluded.email,
+         phone = excluded.phone,
+         role = excluded.role,
+         active = excluded.active`,
+    [ids.staffMarina, ids.staffOtavio],
   )
 
   await client.query(

@@ -40,26 +40,36 @@ import {
   signOut,
   subscribeToOperations,
   unsubscribe,
+  upsertCourier,
+  upsertCustomer,
+  upsertProduct,
+  upsertStaffMember,
   updateCourierStatus,
   updateOrderStatus,
   upsertLocation,
   upsertShop,
+  type CourierInput,
   type CreateOrderInput,
+  type CustomerInput,
+  type ProductInput,
   type ShopInput,
+  type StaffMemberInput,
 } from './lib/repository'
 import type {
   AppSnapshot,
   Courier,
   CourierLocation,
   CourierStatus,
+  Customer,
   DeliveryEvent,
   DeliveryStatus,
   Order,
-  Profile,
+  Product,
   Role,
   RoutePlan,
   SessionUser,
   Shop,
+  StaffMember,
 } from './types'
 
 type RouteState =
@@ -68,7 +78,7 @@ type RouteState =
   | { name: 'client' }
   | { name: 'courier' }
 
-type AdminTab = 'dashboard' | 'orders' | 'couriers' | 'clients' | 'shops' | 'history'
+type AdminTab = 'dashboard' | 'orders' | 'couriers' | 'clients' | 'shops' | 'team' | 'history'
 type ClientTab = 'dashboard' | 'orders' | 'newOrder'
 type OrderStatusFilter = DeliveryStatus | 'all'
 
@@ -300,6 +310,58 @@ function App() {
     }
   }
 
+  async function saveProduct(input: ProductInput, productId?: string) {
+    try {
+      const product = await upsertProduct(input, productId)
+      setSnapshot((current) => ({
+        ...current,
+        products: [product, ...current.products.filter((item) => item.id !== product.id)].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      showNotice(productId ? copy.notice.productUpdated : copy.notice.productCreated)
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : copy.notice.productFailed)
+    }
+  }
+
+  async function saveCustomer(input: CustomerInput, customerId?: string) {
+    try {
+      const customer = await upsertCustomer(input, customerId)
+      setSnapshot((current) => ({
+        ...current,
+        customers: [customer, ...current.customers.filter((item) => item.id !== customer.id)].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      showNotice(customerId ? copy.notice.customerUpdated : copy.notice.customerCreated)
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : copy.notice.customerFailed)
+    }
+  }
+
+  async function saveCourier(input: CourierInput, courierId?: string) {
+    try {
+      const courier = await upsertCourier(input, courierId)
+      setSnapshot((current) => ({
+        ...current,
+        couriers: [courier, ...current.couriers.filter((item) => item.id !== courier.id)].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      showNotice(courierId ? copy.notice.courierUpdated : copy.notice.courierCreated)
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : copy.notice.courierFailed)
+    }
+  }
+
+  async function saveStaffMember(input: StaffMemberInput, staffMemberId?: string) {
+    try {
+      const staffMember = await upsertStaffMember(input, staffMemberId)
+      setSnapshot((current) => ({
+        ...current,
+        staffMembers: [staffMember, ...current.staffMembers.filter((item) => item.id !== staffMember.id)].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      showNotice(staffMemberId ? copy.notice.staffUpdated : copy.notice.staffCreated)
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : copy.notice.staffFailed)
+    }
+  }
+
   return (
     <I18nContext.Provider value={{ copy, locale, setLocale }}>
     <div className="app-shell">
@@ -316,7 +378,11 @@ function App() {
             changeOrderStatus={(order, status) => changeOrderStatus(order, status, session.name)}
             logout={logout}
             routePlan={routePlan}
+            saveCourier={saveCourier}
+            saveCustomer={saveCustomer}
+            saveProduct={saveProduct}
             saveShop={saveShop}
+            saveStaffMember={saveStaffMember}
             selectedOrder={selectedOrder}
             selectedOrderId={selectedOrderId}
             setCourierStatus={setCourierStatus}
@@ -447,12 +513,16 @@ function LoginGate({ loading, login, navigate, role }: { loading: boolean; login
   )
 }
 
-function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop, selectedOrder, selectedOrderId, setCourierStatus, setSelectedOrderId, snapshot, user }: {
+function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveCourier, saveCustomer, saveProduct, saveShop, saveStaffMember, selectedOrder, selectedOrderId, setCourierStatus, setSelectedOrderId, snapshot, user }: {
   assignOrder: (order: Order, courierId: string) => void
   changeOrderStatus: (order: Order, status: DeliveryStatus) => void
   logout: () => void
   routePlan: RoutePlan | null
+  saveCourier: (input: CourierInput, courierId?: string) => Promise<void>
+  saveCustomer: (input: CustomerInput, customerId?: string) => Promise<void>
+  saveProduct: (input: ProductInput, productId?: string) => Promise<void>
   saveShop: (input: ShopInput, shopId?: string) => Promise<void>
+  saveStaffMember: (input: StaffMemberInput, staffMemberId?: string) => Promise<void>
   selectedOrder: Order | null
   selectedOrderId: string
   setCourierStatus: (courier: Courier, status: CourierStatus) => void
@@ -498,9 +568,10 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
         {tab === 'orders' ? (
           <OrdersAdminView assignOrder={assignOrder} changeOrderStatus={changeOrderStatus} orders={filteredOrders} selectedOrder={selectedOrder} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
         ) : null}
-        {tab === 'couriers' ? <CouriersAdminView couriers={snapshot.couriers} orders={snapshot.orders} search={search} setCourierStatus={setCourierStatus} /> : null}
-        {tab === 'clients' ? <ClientsAdminView search={search} snapshot={snapshot} /> : null}
-        {tab === 'shops' ? <ShopsAdminView saveShop={saveShop} search={search} snapshot={snapshot} /> : null}
+        {tab === 'couriers' ? <CouriersAdminView couriers={snapshot.couriers} orders={snapshot.orders} saveCourier={saveCourier} search={search} setCourierStatus={setCourierStatus} /> : null}
+        {tab === 'clients' ? <ClientsAdminView saveCustomer={saveCustomer} search={search} snapshot={snapshot} /> : null}
+        {tab === 'shops' ? <ShopsAdminView saveProduct={saveProduct} saveShop={saveShop} search={search} snapshot={snapshot} /> : null}
+        {tab === 'team' ? <TeamAdminView saveStaffMember={saveStaffMember} search={search} staffMembers={snapshot.staffMembers} /> : null}
         {tab === 'history' ? <HistoryAdminView events={snapshot.events} orders={snapshot.orders} search={search} /> : null}
         {tab !== 'dashboard' ? <div className="panel-spacer" /> : null}
       </section>
@@ -516,6 +587,7 @@ function AdminSidebar({ active, logout, setActive, user }: { active: AdminTab; l
     { id: 'couriers', label: copy.sidebar.couriers, icon: <Bike size={15} /> },
     { id: 'clients', label: copy.sidebar.clients, icon: <UsersRound size={15} /> },
     { id: 'shops', label: copy.sidebar.shops, icon: <Store size={15} /> },
+    { id: 'team', label: copy.sidebar.team, icon: <ShieldCheck size={15} /> },
     { id: 'history', label: copy.sidebar.history, icon: <History size={15} /> },
   ]
 
@@ -680,78 +752,137 @@ function OrdersAdminView({ assignOrder, changeOrderStatus, orders, selectedOrder
   )
 }
 
-function CouriersAdminView({ couriers, orders, search, setCourierStatus }: { couriers: Courier[]; orders: Order[]; search: string; setCourierStatus: (courier: Courier, status: CourierStatus) => void }) {
+function CouriersAdminView({ couriers, orders, saveCourier, search, setCourierStatus }: { couriers: Courier[]; orders: Order[]; saveCourier: (input: CourierInput, courierId?: string) => Promise<void>; search: string; setCourierStatus: (courier: Courier, status: CourierStatus) => void }) {
   const { copy, locale } = useI18n()
   const visibleCouriers = couriers.filter((courier) => matchesCourier(courier, search))
   return (
-    <section className="cards-grid-view">
-      {visibleCouriers.length ? visibleCouriers.map((courier) => {
-        const activeCourierOrders = orders.filter((order) => order.assignedCourierId === courier.id && activeStatuses.includes(order.status))
-        const activeOrder = activeCourierOrders[0] ?? null
-        const operationalLabel = courier.status === 'offline'
-          ? courierStatusLabel('offline', locale)
-          : activeOrder
-            ? statusLabel(activeOrder.status, locale)
-            : courierStatusLabel('available', locale)
-        return (
-          <article className="panel entity-card" key={courier.id}>
-            <span className={`courier-dot ${courier.status}`} />
-            <h2>{courier.name}</h2>
-            <p>{courier.phone}</p>
-            <p>{courier.vehicle} · {courier.plate}</p>
-            <div className="detail-metrics"><span>{operationalLabel}</span><span>{copy.admin.activeCount(activeCourierOrders.length)}</span><span>★ {courier.rating}</span></div>
-            <div className="action-row">
-              <button className="button-soft" onClick={() => setCourierStatus(courier, 'available')} type="button">{copy.admin.available}</button>
-              <button className="button-soft" onClick={() => setCourierStatus(courier, 'offline')} type="button">{copy.admin.offline}</button>
-            </div>
-          </article>
-        )
-      }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
+    <section className="registry-workbench">
+      <CourierForm saveCourier={saveCourier} />
+      <div className="registry-list-panel panel">
+        <PanelTitle action={copy.admin.couriersCount(visibleCouriers.length)} title={copy.sidebar.couriers} />
+        <div className="cards-grid-view compact-cards">
+          {visibleCouriers.length ? visibleCouriers.map((courier) => {
+            const activeCourierOrders = orders.filter((order) => order.assignedCourierId === courier.id && activeStatuses.includes(order.status))
+            const activeOrder = activeCourierOrders[0] ?? null
+            const operationalLabel = courier.status === 'offline'
+              ? courierStatusLabel('offline', locale)
+              : activeOrder
+                ? statusLabel(activeOrder.status, locale)
+                : courierStatusLabel('available', locale)
+            return (
+              <article className="entity-card registry-card" key={courier.id}>
+                <span className={`courier-dot ${courier.status}`} />
+                <h2>{courier.name}</h2>
+                <p>{courier.phone}</p>
+                <p>{courier.vehicle} · {courier.plate}</p>
+                <div className="detail-metrics"><span>{operationalLabel}</span><span>{copy.admin.activeCount(activeCourierOrders.length)}</span><span>★ {courier.rating}</span></div>
+                <div className="action-row">
+                  <button className="button-soft" onClick={() => setCourierStatus(courier, 'available')} type="button">{copy.admin.available}</button>
+                  <button className="button-soft" onClick={() => setCourierStatus(courier, 'offline')} type="button">{copy.admin.offline}</button>
+                </div>
+              </article>
+            )
+          }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
+        </div>
+      </div>
     </section>
   )
 }
 
-function ClientsAdminView({ search, snapshot }: { search: string; snapshot: AppSnapshot }) {
+function CourierForm({ saveCourier }: { saveCourier: (input: CourierInput, courierId?: string) => Promise<void> }) {
   const { copy } = useI18n()
-  const clients = snapshot.profiles.filter((profile) => profile.role === 'client')
-  const visibleClients = clients.filter((client) => matchesProfile(client, search))
-  const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? '')
-  const selectedClient = clients.find((client) => client.id === selectedClientId) ?? clients[0] ?? null
+  const [name, setName] = useState('Novo motoboy')
+  const [phone, setPhone] = useState('+55 11 98888-0000')
+  const [vehicle, setVehicle] = useState('Honda CG 160')
+  const [plate, setPlate] = useState('MOT-0B01')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await saveCourier({ name, phone, vehicle, plate, rating: 5, status: 'available' })
+  }
 
   return (
-    <section className="admin-detail-layout">
+    <form className="panel order-form registry-form" onSubmit={(event) => void submit(event)}>
+      <PanelTitle action={copy.admin.operationalRecord} title={copy.admin.newCourierTitle} />
+      <label>{copy.admin.name}<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+      <label>{copy.admin.vehicle}<input required value={vehicle} onChange={(event) => setVehicle(event.target.value)} /></label>
+      <label>{copy.admin.plate}<input required value={plate} onChange={(event) => setPlate(event.target.value.toUpperCase())} /></label>
+      <p className="form-hint">{copy.admin.authInviteHint}</p>
+      <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveCourier}</button>
+    </form>
+  )
+}
+
+function ClientsAdminView({ saveCustomer, search, snapshot }: { saveCustomer: (input: CustomerInput, customerId?: string) => Promise<void>; search: string; snapshot: AppSnapshot }) {
+  const { copy } = useI18n()
+  const visibleCustomers = snapshot.customers.filter((customer) => matchesCustomer(customer, search))
+  const [selectedCustomerId, setSelectedCustomerId] = useState(snapshot.customers[0]?.id ?? '')
+  const selectedCustomer = snapshot.customers.find((customer) => customer.id === selectedCustomerId) ?? snapshot.customers[0] ?? null
+
+  return (
+    <section className="registry-workbench wide">
+      <CustomerForm saveCustomer={saveCustomer} />
       <div className="entity-selection-list">
-        {visibleClients.length ? visibleClients.map((client) => {
-          const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === client.id)
+        {visibleCustomers.length ? visibleCustomers.map((customer) => {
+          const clientOrders = snapshot.orders.filter((order) => orderBelongsToCustomer(order, customer))
           return (
-            <button className={`panel entity-card entity-card-button ${selectedClient?.id === client.id ? 'selected' : ''}`} key={client.id} onClick={() => setSelectedClientId(client.id)} type="button">
+            <button className={`panel entity-card entity-card-button ${selectedCustomer?.id === customer.id ? 'selected' : ''}`} key={customer.id} onClick={() => setSelectedCustomerId(customer.id)} type="button">
               <span className="entity-icon"><UsersRound size={18} /></span>
-              <h2>{client.name}</h2>
-              <p>{client.email}</p>
+              <h2>{customer.name}</h2>
+              <p>{customer.email}</p>
+              <p>{customer.address}</p>
               <div className="detail-metrics"><span>{copy.admin.clientOrderCount(clientOrders.length)}</span><span>{copy.admin.activeCount(clientOrders.filter((order) => activeStatuses.includes(order.status)).length)}</span></div>
             </button>
           )
         }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
       </div>
-      <ClientAdminDetail client={selectedClient} snapshot={snapshot} />
+      <ClientAdminDetail customer={selectedCustomer} snapshot={snapshot} />
     </section>
   )
 }
 
-function ClientAdminDetail({ client, snapshot }: { client: Profile | null; snapshot: AppSnapshot }) {
+function CustomerForm({ saveCustomer }: { saveCustomer: (input: CustomerInput, customerId?: string) => Promise<void> }) {
+  const { copy } = useI18n()
+  const [name, setName] = useState('Novo cliente')
+  const [email, setEmail] = useState('cliente.novo@motoboy.demo')
+  const [phone, setPhone] = useState('+55 11 90000-0000')
+  const [address, setAddress] = useState('Rua Bela Cintra, 900 - Consolacao, Sao Paulo')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await saveCustomer({ name, email, phone, address, active: true })
+  }
+
+  return (
+    <form className="panel order-form registry-form" onSubmit={(event) => void submit(event)}>
+      <PanelTitle action={copy.admin.operationalRecord} title={copy.admin.newCustomerTitle} />
+      <label>{copy.admin.name}<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.email}<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>{copy.admin.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+      <label>{copy.admin.address}<input required value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+      <p className="form-hint">{copy.admin.authInviteHint}</p>
+      <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveCustomer}</button>
+    </form>
+  )
+}
+
+function ClientAdminDetail({ customer, snapshot }: { customer: Customer | null; snapshot: AppSnapshot }) {
   const { copy } = useI18n()
 
-  if (!client) return <EmptyBlock title={copy.admin.selectClientTitle} text={copy.admin.selectClientText} />
+  if (!customer) return <EmptyBlock title={copy.admin.selectClientTitle} text={copy.admin.selectClientText} />
 
-  const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === client.id)
+  const clientOrders = snapshot.orders.filter((order) => orderBelongsToCustomer(order, customer))
   const activeClientOrders = clientOrders.filter((order) => activeStatuses.includes(order.status))
   const deliveredClientOrders = clientOrders.filter((order) => order.status === 'delivered')
 
   return (
     <div className="panel detail-admin-panel">
       <PanelTitle action={copy.admin.clientOrderCount(clientOrders.length)} title={copy.admin.clientDetails} />
-      <h2>{client.name}</h2>
-      <p>{client.email}</p>
+      <h2>{customer.name}</h2>
+      <p>{customer.email}</p>
+      <p>{customer.phone}</p>
+      <p>{customer.address}</p>
       <div className="detail-metrics">
         <span>{copy.admin.activeCount(activeClientOrders.length)}</span>
         <span>{copy.admin.deliveredCount(deliveredClientOrders.length)}</span>
@@ -766,15 +897,18 @@ function ClientAdminDetail({ client, snapshot }: { client: Profile | null; snaps
   )
 }
 
-function ShopsAdminView({ saveShop, search, snapshot }: { saveShop: (input: ShopInput, shopId?: string) => Promise<void>; search: string; snapshot: AppSnapshot }) {
+function ShopsAdminView({ saveProduct, saveShop, search, snapshot }: { saveProduct: (input: ProductInput, productId?: string) => Promise<void>; saveShop: (input: ShopInput, shopId?: string) => Promise<void>; search: string; snapshot: AppSnapshot }) {
   const { copy } = useI18n()
   const [selectedShopId, setSelectedShopId] = useState(snapshot.shops[0]?.id ?? '')
   const selectedShop = snapshot.shops.find((shop) => shop.id === selectedShopId) ?? snapshot.shops[0] ?? null
-  const visibleShops = snapshot.shops.filter((shop) => matchesShop(shop, search))
+  const visibleShops = snapshot.shops.filter((shop) => matchesShop(shop, snapshot.products, search))
 
   return (
     <section className="admin-three-column shops-layout">
-      <ShopForm saveShop={saveShop} />
+      <div className="registry-stack">
+        <ShopForm saveShop={saveShop} />
+        <ProductForm key={selectedShop?.id ?? 'new-product'} saveProduct={saveProduct} selectedShopId={selectedShop?.id ?? snapshot.shops[0]?.id ?? ''} shops={snapshot.shops} />
+      </div>
       <div className="panel">
         <PanelTitle action={copy.admin.shopsCount(visibleShops.length)} title={copy.admin.shopsTitle} />
         <div className="entity-list">
@@ -782,7 +916,7 @@ function ShopsAdminView({ saveShop, search, snapshot }: { saveShop: (input: Shop
             <article className={`shop-row ${selectedShop?.id === shop.id ? 'selected' : ''}`} key={shop.id}>
               <button className="shop-row-main" onClick={() => setSelectedShopId(shop.id)} type="button">
                 <span className="entity-icon"><Store size={17} /></span>
-                <div><strong>{shop.name}</strong><small>{shop.address}</small><small>{shop.contactName} · {shop.phone}</small></div>
+                <div><strong>{shop.name}</strong><small>{shop.address}</small><small>{shop.contactName} · {shop.phone}</small><small>{copy.admin.productsCount(snapshot.products.filter((product) => product.shopId === shop.id).length)}</small></div>
               </button>
               <div className="shop-row-actions">
                 <button className="button-soft" onClick={() => setSelectedShopId(shop.id)} type="button">{copy.admin.openDetails}</button>
@@ -792,20 +926,45 @@ function ShopsAdminView({ saveShop, search, snapshot }: { saveShop: (input: Shop
           )) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
         </div>
       </div>
-      <ShopAdminDetail shop={selectedShop} snapshot={snapshot} />
+      <ShopAdminDetail saveProduct={saveProduct} shop={selectedShop} snapshot={snapshot} />
     </section>
   )
 }
 
-function ShopAdminDetail({ shop, snapshot }: { shop: Shop | null; snapshot: AppSnapshot }) {
+function ProductForm({ saveProduct, selectedShopId, shops }: { saveProduct: (input: ProductInput, productId?: string) => Promise<void>; selectedShopId: string; shops: Shop[] }) {
   const { copy } = useI18n()
+  const [shopId, setShopId] = useState(selectedShopId)
+  const [name, setName] = useState('Novo produto')
+  const [category, setCategory] = useState('Geral')
+  const [price, setPrice] = useState('49.90')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await saveProduct({ shopId, name, category, priceCents: Math.round(Number(price.replace(',', '.')) * 100), active: true })
+  }
+
+  return (
+    <form className="panel order-form registry-form" onSubmit={(event) => void submit(event)}>
+      <PanelTitle action={copy.admin.catalog} title={copy.admin.productFormTitle} />
+      <label>{copy.admin.shop}<select required value={shopId} onChange={(event) => setShopId(event.target.value)}>{shops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
+      <label>{copy.admin.name}<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.category}<input required value={category} onChange={(event) => setCategory(event.target.value)} /></label>
+      <label>{copy.admin.price}<input min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} /></label>
+      <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveProduct}</button>
+    </form>
+  )
+}
+
+function ShopAdminDetail({ saveProduct, shop, snapshot }: { saveProduct: (input: ProductInput, productId?: string) => Promise<void>; shop: Shop | null; snapshot: AppSnapshot }) {
+  const { copy, locale } = useI18n()
 
   if (!shop) return <EmptyBlock title={copy.admin.selectShopTitle} text={copy.admin.selectShopText} />
 
   const shopOrders = snapshot.orders.filter((order) => orderBelongsToShop(order, shop))
   const clientIds = new Set(shopOrders.map((order) => order.clientProfileId).filter(Boolean))
-  const shopClients = snapshot.profiles.filter((profile) => profile.role === 'client' && clientIds.has(profile.id))
+  const shopClients = snapshot.customers.filter((customer) => shopOrders.some((order) => orderBelongsToCustomer(order, customer)) || clientIds.has(customer.id))
   const activeShopOrders = shopOrders.filter((order) => activeStatuses.includes(order.status))
+  const shopProducts = snapshot.products.filter((product) => product.shopId === shop.id)
 
   return (
     <div className="panel detail-admin-panel">
@@ -817,6 +976,19 @@ function ShopAdminDetail({ shop, snapshot }: { shop: Shop | null; snapshot: AppS
         <span>{shop.phone}</span>
         <span>{copy.admin.activeCount(activeShopOrders.length)}</span>
       </div>
+      <PanelTitle action={copy.admin.productsCount(shopProducts.length)} title={copy.admin.catalogTitle} />
+      {shopProducts.length ? (
+        <div className="product-list">
+          {shopProducts.map((product) => (
+            <article className="product-row" key={product.id}>
+              <div><strong>{product.name}</strong><span>{product.category} · {formatCurrency(product.priceCents, locale)}</span></div>
+              <button className="button-soft" onClick={() => void saveProduct({ ...product, active: !product.active }, product.id)} type="button">{product.active ? copy.admin.productActive : copy.admin.productInactive}</button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyBlock title={copy.admin.noProductsTitle} text={copy.admin.noProductsText} />
+      )}
       <PanelTitle action={copy.admin.clientOrderCount(shopClients.length)} title={copy.admin.shopClientsTitle} />
       {shopClients.length ? (
         <div className="detail-list">
@@ -866,6 +1038,57 @@ function ShopForm({ saveShop }: { saveShop: (input: ShopInput, shopId?: string) 
   )
 }
 
+function TeamAdminView({ saveStaffMember, search, staffMembers }: { saveStaffMember: (input: StaffMemberInput, staffMemberId?: string) => Promise<void>; search: string; staffMembers: StaffMember[] }) {
+  const { copy } = useI18n()
+  const visibleStaff = staffMembers.filter((staffMember) => matchesStaffMember(staffMember, search))
+
+  return (
+    <section className="registry-workbench">
+      <StaffMemberForm saveStaffMember={saveStaffMember} />
+      <div className="registry-list-panel panel">
+        <PanelTitle action={copy.admin.staffCount(visibleStaff.length)} title={copy.admin.teamTitle} />
+        <div className="cards-grid-view compact-cards">
+          {visibleStaff.length ? visibleStaff.map((staffMember) => (
+            <article className="entity-card registry-card" key={staffMember.id}>
+              <span className="entity-icon"><ShieldCheck size={18} /></span>
+              <h2>{staffMember.name}</h2>
+              <p>{staffMember.email}</p>
+              <p>{staffMember.phone}</p>
+              <div className="detail-metrics"><span>{staffRoleLabel(staffMember.role, copy)}</span><span>{staffMember.active ? copy.admin.staffActive : copy.admin.staffInactive}</span></div>
+              <button className="button-soft" onClick={() => void saveStaffMember({ ...staffMember, active: !staffMember.active }, staffMember.id)} type="button">{staffMember.active ? copy.admin.staffActive : copy.admin.staffInactive}</button>
+            </article>
+          )) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function StaffMemberForm({ saveStaffMember }: { saveStaffMember: (input: StaffMemberInput, staffMemberId?: string) => Promise<void> }) {
+  const { copy } = useI18n()
+  const [name, setName] = useState('Novo operador')
+  const [email, setEmail] = useState('operador@motoboy.demo')
+  const [phone, setPhone] = useState('+55 11 97777-0000')
+  const [role, setRole] = useState<StaffMember['role']>('dispatcher')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await saveStaffMember({ name, email, phone, role, active: true })
+  }
+
+  return (
+    <form className="panel order-form registry-form" onSubmit={(event) => void submit(event)}>
+      <PanelTitle action={copy.admin.operationalRecord} title={copy.admin.newStaffTitle} />
+      <label>{copy.admin.name}<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.email}<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>{copy.admin.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+      <label>{copy.admin.role}<select value={role} onChange={(event) => setRole(event.target.value as StaffMember['role'])}><option value="admin">{copy.admin.roleAdmin}</option><option value="dispatcher">{copy.admin.roleDispatcher}</option><option value="support">{copy.admin.roleSupport}</option></select></label>
+      <p className="form-hint">{copy.admin.authInviteHint}</p>
+      <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveStaff}</button>
+    </form>
+  )
+}
+
 function HistoryAdminView({ events, orders, search }: { events: DeliveryEvent[]; orders: Order[]; search: string }) {
   const { copy, locale } = useI18n()
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
@@ -906,6 +1129,8 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
   const [shopId, setShopId] = useState(activeShops[0]?.id ?? '')
   const [destinationIndex, setDestinationIndex] = useState('0')
   const [itemName, setItemName] = useState(copy.client.defaultItem)
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({})
   const previousDefaultItem = useRef(copy.client.defaultItem)
   const [phone, setPhone] = useState('+55 11 90000-1001')
   const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === session.id)
@@ -918,6 +1143,8 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
   const highlightedOrder = activeClientOrders[0] ?? clientOrders[0] ?? null
   const pageTitle = tab === 'dashboard' ? copy.client.dashboardTitle : tab === 'orders' ? copy.client.ordersTitle : copy.client.requestTitle
   const effectiveShopId = activeShops.some((shop) => shop.id === shopId) ? shopId : activeShops[0]?.id ?? ''
+  const shopProducts = snapshot.products.filter((product) => product.active && product.shopId === effectiveShopId)
+  const selectedProductIdsForShop = selectedProductIds.filter((productId) => shopProducts.some((product) => product.id === productId))
   const clientOrderIds = new Set(clientOrders.map((order) => order.id))
   const { markAllNotificationsRead, markNotificationRead, readNotificationIds } = useNotificationReadState(session.id)
   const notifications = makeNotificationItems(snapshot.events.filter((event) => clientOrderIds.has(event.orderId)), clientOrders, copy, locale, readNotificationIds)
@@ -932,10 +1159,19 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
     previousDefaultItem.current = copy.client.defaultItem
   }, [copy.client.defaultItem, itemName])
 
+  function toggleProduct(productId: string) {
+    setSelectedProductIds((current) => current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId])
+  }
+
+  function setProductQuantity(productId: string, quantity: number) {
+    setProductQuantities((current) => ({ ...current, [productId]: Math.max(1, quantity) }))
+  }
+
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const shop = activeShops.find((item) => item.id === effectiveShopId) ?? activeShops[0]
     const destination = destinationOptions[Number(destinationIndex)] ?? destinationOptions[0]
+    const selectedProducts = shopProducts.filter((product) => selectedProductIdsForShop.includes(product.id))
     if (!shop) return
 
     await createOrder({
@@ -947,8 +1183,10 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
       destinationAddress: destination.address,
       pickup: { lat: shop.lat, lng: shop.lng },
       destination: destination.point,
-      totalCents: 6990,
-      items: [{ name: itemName || copy.client.defaultItem, quantity: 1 }],
+      totalCents: selectedProducts.reduce((total, product) => total + product.priceCents * (productQuantities[product.id] ?? 1), 0) || 6990,
+      items: selectedProducts.length
+        ? selectedProducts.map((product) => ({ name: product.name, quantity: productQuantities[product.id] ?? 1 }))
+        : [{ name: itemName || copy.client.defaultItem, quantity: 1 }],
     })
     setItemName(copy.client.defaultItem)
     setTab('orders')
@@ -999,12 +1237,17 @@ function ClientPage({ createOrder, logout, routePlan, selectedOrderId, session, 
             destinationIndex={destinationIndex}
             itemName={itemName}
             phone={phone}
+            productQuantities={productQuantities}
+            products={shopProducts}
+            selectedProductIds={selectedProductIdsForShop}
             setDestinationIndex={setDestinationIndex}
             setItemName={setItemName}
             setPhone={setPhone}
+            setProductQuantity={setProductQuantity}
             setShopId={setShopId}
             shopId={effectiveShopId}
             submitOrder={submitOrder}
+            toggleProduct={toggleProduct}
           />
         ) : null}
       </section>
@@ -1121,21 +1364,29 @@ function ClientOrdersView({ eta, orders, routePlan, selectedLocation, selectedOr
   )
 }
 
-function ClientNewOrderView({ activeShops, destinationIndex, itemName, phone, setDestinationIndex, setItemName, setPhone, setShopId, shopId, submitOrder }: {
+function ClientNewOrderView({ activeShops, destinationIndex, itemName, phone, productQuantities, products, selectedProductIds, setDestinationIndex, setItemName, setPhone, setProductQuantity, setShopId, shopId, submitOrder, toggleProduct }: {
   activeShops: Shop[]
   destinationIndex: string
   itemName: string
   phone: string
+  productQuantities: Record<string, number>
+  products: Product[]
+  selectedProductIds: string[]
   setDestinationIndex: (value: string) => void
   setItemName: (value: string) => void
   setPhone: (value: string) => void
+  setProductQuantity: (productId: string, quantity: number) => void
   setShopId: (value: string) => void
   shopId: string
   submitOrder: (event: FormEvent<HTMLFormElement>) => void
+  toggleProduct: (productId: string) => void
 }) {
-  const { copy } = useI18n()
+  const { copy, locale } = useI18n()
   const selectedShop = activeShops.find((shop) => shop.id === shopId) ?? activeShops[0]
   const selectedDestination = destinationOptions[Number(destinationIndex)] ?? destinationOptions[0]
+  const selectedTotal = products
+    .filter((product) => selectedProductIds.includes(product.id))
+    .reduce((total, product) => total + product.priceCents * (productQuantities[product.id] ?? 1), 0)
 
   return (
     <section className="new-order-screen">
@@ -1154,9 +1405,24 @@ function ClientNewOrderView({ activeShops, destinationIndex, itemName, phone, se
         <PanelTitle action={copy.client.online} title={copy.client.formSection} />
         <label>{copy.client.origin}<select required value={shopId} onChange={(event) => setShopId(event.target.value)}>{activeShops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
         <label>{copy.client.destination}<select required value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>{destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}</select></label>
-        <label>{copy.client.item}<input required value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
+        <div className="product-picker">
+          <div className="product-picker-head"><strong>{copy.client.products}</strong><span>{selectedTotal ? formatCurrency(selectedTotal, locale) : copy.client.noProductSelected}</span></div>
+          {products.length ? products.map((product) => {
+            const selected = selectedProductIds.includes(product.id)
+            return (
+              <article className={`product-option ${selected ? 'selected' : ''}`} key={product.id}>
+                <button onClick={() => toggleProduct(product.id)} type="button">
+                  <span><strong>{product.name}</strong><small>{product.category}</small></span>
+                  <span>{formatCurrency(product.priceCents, locale)}</span>
+                </button>
+                {selected ? <label>{copy.client.quantity}<input min="1" type="number" value={productQuantities[product.id] ?? 1} onChange={(event) => setProductQuantity(product.id, Number(event.target.value) || 1)} /></label> : null}
+              </article>
+            )
+          }) : <EmptyBlock title={copy.client.noProductsTitle} text={copy.client.noProductsText} />}
+        </div>
+        <label>{copy.client.notes}<input value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
         <label>{copy.client.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-        <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.client.createOrder}</button>
+        <button className="button-primary full" disabled={products.length > 0 && selectedProductIds.length === 0} type="submit"><PlusCircle size={16} /> {copy.client.createOrder}</button>
       </form>
     </section>
   )
@@ -1678,6 +1944,12 @@ function orderBelongsToShop(order: Order, shop: Shop) {
   return normalizeText(order.merchantName) === normalizeText(shop.name) || normalizeText(order.pickupAddress) === normalizeText(shop.address)
 }
 
+function orderBelongsToCustomer(order: Order, customer: Customer) {
+  return normalizeText(order.customerName) === normalizeText(customer.name)
+    || normalizeText(order.customerPhone) === normalizeText(customer.phone)
+    || normalizeText(order.destinationAddress) === normalizeText(customer.address)
+}
+
 function normalizeText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 }
@@ -1709,12 +1981,17 @@ function matchesCourier(courier: Courier, search: string) {
   return includesSearch([courier.name, courier.phone, courier.vehicle, courier.plate, courier.status], search)
 }
 
-function matchesProfile(profile: Profile, search: string) {
-  return includesSearch([profile.name, profile.email, profile.role], search)
+function matchesCustomer(customer: Customer, search: string) {
+  return includesSearch([customer.name, customer.email, customer.phone, customer.address, customer.active ? 'active ativo' : 'inactive inativo'], search)
 }
 
-function matchesShop(shop: Shop, search: string) {
-  return includesSearch([shop.name, shop.address, shop.contactName, shop.phone, shop.active ? 'active ativa' : 'inactive inativa'], search)
+function matchesStaffMember(staffMember: StaffMember, search: string) {
+  return includesSearch([staffMember.name, staffMember.email, staffMember.phone, staffMember.role, staffMember.active ? 'active ativo' : 'inactive inativo'], search)
+}
+
+function matchesShop(shop: Shop, products: Product[], search: string) {
+  const shopProducts = products.filter((product) => product.shopId === shop.id)
+  return includesSearch([shop.name, shop.address, shop.contactName, shop.phone, shop.active ? 'active ativa' : 'inactive inativa', shopProducts.map((product) => `${product.name} ${product.category}`).join(' ')], search)
 }
 
 function matchesHistoryEvent(event: DeliveryEvent, orders: Order[], search: string) {
@@ -1732,6 +2009,12 @@ function matchesHistoryEvent(event: DeliveryEvent, orders: Order[], search: stri
 
 function shortAddress(address: string) {
   return address.split(',').slice(0, 2).join(',')
+}
+
+function staffRoleLabel(role: StaffMember['role'], copy: Copy) {
+  if (role === 'admin') return copy.admin.roleAdmin
+  if (role === 'support') return copy.admin.roleSupport
+  return copy.admin.roleDispatcher
 }
 
 function readLocale(): Locale {

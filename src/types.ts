@@ -18,7 +18,7 @@ export type Profile = {
 
 export type Courier = {
   id: string
-  profileId: string
+  profileId: string | null
   name: string
   phone: string
   vehicle: string
@@ -35,6 +35,36 @@ export type Shop = {
   phone: string
   lat: number
   lng: number
+  active: boolean
+  createdAt: string
+}
+
+export type Product = {
+  id: string
+  shopId: string
+  name: string
+  category: string
+  priceCents: number
+  active: boolean
+  createdAt: string
+}
+
+export type Customer = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  address: string
+  active: boolean
+  createdAt: string
+}
+
+export type StaffMember = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: 'admin' | 'dispatcher' | 'support'
   active: boolean
   createdAt: string
 }
@@ -90,7 +120,10 @@ export type DeliveryEvent = {
 export type AppSnapshot = {
   profiles: Profile[]
   couriers: Courier[]
+  customers: Customer[]
   shops: Shop[]
+  products: Product[]
+  staffMembers: StaffMember[]
   orders: Order[]
   locations: CourierLocation[]
   events: DeliveryEvent[]

@@ -1,19 +1,22 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
-import { demoProfiles, demoShops, demoSnapshot } from './demo-data'
+import { demoCustomers, demoProducts, demoProfiles, demoShops, demoSnapshot, demoStaffMembers } from './demo-data'
 import { appCredentials, hasSupabaseConfig, supabase } from './supabase'
 import type {
   AppSnapshot,
   Courier,
   CourierStatus,
   CourierLocation,
+  Customer,
   DeliveryEvent,
   DeliveryStatus,
   Order,
   Profile,
+  Product,
   Role,
   SessionUser,
   Shop,
+  StaffMember,
 } from '../types'
 
 type ProfileRow = {
@@ -49,13 +52,33 @@ type OrderRow = {
 
 type CourierRow = {
   id: string
-  profile_id: string
+  profile_id: string | null
   name: string
   phone: string
   vehicle: string
   plate: string
   rating: number
   status: Courier['status']
+}
+
+type CustomerRow = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  address: string
+  active: boolean
+  created_at: string
+}
+
+type StaffMemberRow = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: StaffMember['role']
+  active: boolean
+  created_at: string
 }
 
 type ShopRow = {
@@ -66,6 +89,16 @@ type ShopRow = {
   phone: string
   lat: number
   lng: number
+  active: boolean
+  created_at: string
+}
+
+type ProductRow = {
+  id: string
+  shop_id: string
+  name: string
+  category: string
+  price_cents: number
   active: boolean
   created_at: string
 }
@@ -114,6 +147,40 @@ export type ShopInput = {
   active: boolean
 }
 
+export type ProductInput = {
+  shopId: string
+  name: string
+  category: string
+  priceCents: number
+  active: boolean
+}
+
+export type CustomerInput = {
+  name: string
+  email: string
+  phone: string
+  address: string
+  active: boolean
+}
+
+export type CourierInput = {
+  name: string
+  phone: string
+  vehicle: string
+  plate: string
+  rating: number
+  status: CourierStatus
+  profileId?: string | null
+}
+
+export type StaffMemberInput = {
+  name: string
+  email: string
+  phone: string
+  role: StaffMember['role']
+  active: boolean
+}
+
 export async function signInWithDemoRole(role: Role): Promise<SessionUser> {
   if (!supabase) {
     const profile = demoProfiles.find((item) => item.role === role)
@@ -154,10 +221,13 @@ export async function signOut() {
 export async function loadSnapshot(): Promise<AppSnapshot> {
   if (!supabase) return demoSnapshot
 
-  const [profiles, couriers, shops, orders, locations, events] = await Promise.all([
+  const [profiles, couriers, customers, staffMembers, shops, products, orders, locations, events] = await Promise.all([
     supabase.from('profiles').select('*').order('name'),
     supabase.from('couriers').select('*').order('name'),
+    supabase.from('customers').select('*').order('name'),
+    supabase.from('staff_members').select('*').order('name'),
     supabase.from('shops').select('*').order('name'),
+    supabase.from('products').select('*').order('name'),
     supabase.from('orders').select('*').order('created_at', { ascending: false }),
     supabase.from('courier_locations').select('*'),
     supabase.from('delivery_events').select('*').order('created_at', { ascending: false }).limit(20),
@@ -165,7 +235,10 @@ export async function loadSnapshot(): Promise<AppSnapshot> {
 
   if (profiles.error) throw profiles.error
   if (couriers.error) throw couriers.error
+  if (customers.error && !isMissingTable(customers.error)) throw customers.error
+  if (staffMembers.error && !isMissingTable(staffMembers.error)) throw staffMembers.error
   if (shops.error && !isMissingShopsTable(shops.error)) throw shops.error
+  if (products.error && !isMissingTable(products.error)) throw products.error
   if (orders.error) throw orders.error
   if (locations.error) throw locations.error
   if (events.error) throw events.error
@@ -173,7 +246,10 @@ export async function loadSnapshot(): Promise<AppSnapshot> {
   return {
     profiles: (profiles.data as ProfileRow[]).map(mapProfile),
     couriers: (couriers.data as CourierRow[]).map(mapCourier),
+    customers: customers.error ? demoCustomers : (customers.data as CustomerRow[]).map(mapCustomer),
     shops: shops.error ? demoShops : (shops.data as ShopRow[]).map(mapShop),
+    products: products.error ? demoProducts : (products.data as ProductRow[]).map(mapProduct),
+    staffMembers: staffMembers.error ? demoStaffMembers : (staffMembers.data as StaffMemberRow[]).map(mapStaffMember),
     orders: (orders.data as OrderRow[]).map(mapOrder),
     locations: (locations.data as LocationRow[]).map(mapLocation),
     events: (events.data as EventRow[]).map(mapEvent),
@@ -271,6 +347,39 @@ export async function updateCourierStatus(courierId: string, status: CourierStat
   if (error) throw error
 }
 
+export async function upsertCourier(input: CourierInput, courierId?: string): Promise<Courier> {
+  const courier: Courier = {
+    id: courierId ?? crypto.randomUUID(),
+    profileId: input.profileId ?? null,
+    name: input.name,
+    phone: input.phone,
+    vehicle: input.vehicle,
+    plate: input.plate,
+    rating: input.rating,
+    status: input.status,
+  }
+
+  if (!supabase) return courier
+
+  const { data, error } = await supabase
+    .from('couriers')
+    .upsert({
+      id: courier.id,
+      profile_id: courier.profileId,
+      name: courier.name,
+      phone: courier.phone,
+      vehicle: courier.vehicle,
+      plate: courier.plate,
+      rating: courier.rating,
+      status: courier.status,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return mapCourier(data as CourierRow)
+}
+
 export async function upsertShop(input: ShopInput, shopId?: string): Promise<Shop> {
   const shop: Shop = {
     id: shopId ?? crypto.randomUUID(),
@@ -303,6 +412,96 @@ export async function upsertShop(input: ShopInput, shopId?: string): Promise<Sho
   if (error) throw error
 
   return mapShop(data as ShopRow)
+}
+
+export async function upsertProduct(input: ProductInput, productId?: string): Promise<Product> {
+  const product: Product = {
+    id: productId ?? crypto.randomUUID(),
+    shopId: input.shopId,
+    name: input.name,
+    category: input.category,
+    priceCents: input.priceCents,
+    active: input.active,
+    createdAt: new Date().toISOString(),
+  }
+
+  if (!supabase) return product
+
+  const { data, error } = await supabase
+    .from('products')
+    .upsert({
+      id: product.id,
+      shop_id: product.shopId,
+      name: product.name,
+      category: product.category,
+      price_cents: product.priceCents,
+      active: product.active,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return mapProduct(data as ProductRow)
+}
+
+export async function upsertCustomer(input: CustomerInput, customerId?: string): Promise<Customer> {
+  const customer: Customer = {
+    id: customerId ?? crypto.randomUUID(),
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    address: input.address,
+    active: input.active,
+    createdAt: new Date().toISOString(),
+  }
+
+  if (!supabase) return customer
+
+  const { data, error } = await supabase
+    .from('customers')
+    .upsert({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+      active: customer.active,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return mapCustomer(data as CustomerRow)
+}
+
+export async function upsertStaffMember(input: StaffMemberInput, staffMemberId?: string): Promise<StaffMember> {
+  const staffMember: StaffMember = {
+    id: staffMemberId ?? crypto.randomUUID(),
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    role: input.role,
+    active: input.active,
+    createdAt: new Date().toISOString(),
+  }
+
+  if (!supabase) return staffMember
+
+  const { data, error } = await supabase
+    .from('staff_members')
+    .upsert({
+      id: staffMember.id,
+      name: staffMember.name,
+      email: staffMember.email,
+      phone: staffMember.phone,
+      role: staffMember.role,
+      active: staffMember.active,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return mapStaffMember(data as StaffMemberRow)
 }
 
 export async function updateOrderStatus(orderId: string, status: DeliveryStatus, actorName: string) {
@@ -346,6 +545,9 @@ export function subscribeToOperations(onChange: () => void): RealtimeChannel | n
     .channel('operations')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shops' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_members' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'courier_locations' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_events' }, onChange)
     .subscribe()
@@ -402,6 +604,30 @@ function mapCourier(row: CourierRow): Courier {
   }
 }
 
+function mapCustomer(row: CustomerRow): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    active: row.active,
+    createdAt: row.created_at,
+  }
+}
+
+function mapStaffMember(row: StaffMemberRow): StaffMember {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    role: row.role,
+    active: row.active,
+    createdAt: row.created_at,
+  }
+}
+
 function mapShop(row: ShopRow): Shop {
   return {
     id: row.id,
@@ -411,6 +637,18 @@ function mapShop(row: ShopRow): Shop {
     phone: row.phone,
     lat: row.lat,
     lng: row.lng,
+    active: row.active,
+    createdAt: row.created_at,
+  }
+}
+
+function mapProduct(row: ProductRow): Product {
+  return {
+    id: row.id,
+    shopId: row.shop_id,
+    name: row.name,
+    category: row.category,
+    priceCents: row.price_cents,
     active: row.active,
     createdAt: row.created_at,
   }
@@ -442,6 +680,10 @@ function mapEvent(row: EventRow): DeliveryEvent {
 }
 
 function isMissingShopsTable(error: { code?: string }) {
+  return error.code === '42P01' || error.code === 'PGRST205'
+}
+
+function isMissingTable(error: { code?: string }) {
   return error.code === '42P01' || error.code === 'PGRST205'
 }
 
