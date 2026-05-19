@@ -36,14 +36,20 @@ Sem Supabase configurado, o app usa dados locais de demonstracao.
 1. Crie um projeto no Supabase.
 2. Abra o SQL Editor e rode `supabase/schema.sql`.
 3. Copie `.env.example` para `.env.local`.
-4. Preencha `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`.
-5. Rode o seed:
+4. Preencha `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `SUPABASE_DB_URL`.
+5. Aplique o schema e crie os dados demo:
+
+```bash
+npm run setup:supabase
+```
+
+Se preferir usar a API Admin do Supabase, preencha `SUPABASE_SERVICE_ROLE_KEY` e rode o seed legado:
 
 ```bash
 npm run seed
 ```
 
-O `SUPABASE_SERVICE_ROLE_KEY` e usado apenas localmente no seed. Nunca publique essa chave no GitHub ou como variavel `VITE_`.
+`SUPABASE_DB_URL` e `SUPABASE_SERVICE_ROLE_KEY` sao usados apenas localmente. Nunca publique esses valores no GitHub ou como variaveis `VITE_`.
 
 ## Variaveis de ambiente da Vercel
 
