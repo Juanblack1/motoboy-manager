@@ -81,6 +81,12 @@ const ptBR = {
     notificationsEmptyTitle: 'Nada novo por aqui',
     notificationsEmptyText: 'Atualizações de pedidos, atrasos e entregas aparecerão aqui.',
   },
+  filters: {
+    status: 'Status',
+    allStatuses: 'Todos os status',
+    noResultsTitle: 'Nenhum resultado',
+    noResultsText: 'Ajuste a busca ou o filtro para ver mais itens.',
+  },
   admin: {
     activeOrders: 'Pedidos ativos',
     pendingDispatch: 'Despacho pendente',
@@ -207,10 +213,16 @@ const ptBR = {
     simulateStart: 'Simular rota',
     simulateStop: 'Parar demo',
     eta: (minutes: number) => `ETA ${minutes} min`,
+    historyTitle: 'Meu histórico',
+    completedCount: (count: number) => `${count} concluída(s)`,
+    noHistoryTitle: 'Histórico vazio',
+    noHistoryText: 'Entregas finalizadas aparecem aqui para acompanhar seu trabalho.',
   },
   queue: {
     noCourier: 'Sem motoboy',
     assign: (name: string) => `Atribuir ${name}`,
+    emptyTitle: 'Nada encontrado',
+    emptyText: 'Ajuste busca ou filtros para encontrar pedidos.',
   },
   status: {
     assigned: 'Atribuído',
@@ -314,6 +326,12 @@ export const translations: Record<Locale, typeof ptBR> = {
       notificationDescription: (actorName: string, status: string) => `${actorName} updated the status to ${status}.`,
       notificationsEmptyTitle: 'Nothing new here',
       notificationsEmptyText: 'Order updates, delays, and deliveries will appear here.',
+    },
+    filters: {
+      status: 'Status',
+      allStatuses: 'All statuses',
+      noResultsTitle: 'No results',
+      noResultsText: 'Adjust search or filters to see more items.',
     },
     admin: {
       activeOrders: 'Active orders',
@@ -441,10 +459,16 @@ export const translations: Record<Locale, typeof ptBR> = {
       simulateStart: 'Simulate route',
       simulateStop: 'Stop demo',
       eta: (minutes: number) => `ETA ${minutes} min`,
+      historyTitle: 'My history',
+      completedCount: (count: number) => `${count} completed`,
+      noHistoryTitle: 'Empty history',
+      noHistoryText: 'Finished deliveries appear here so you can track your work.',
     },
     queue: {
       noCourier: 'No courier',
       assign: (name: string) => `Assign ${name}`,
+      emptyTitle: 'Nothing found',
+      emptyText: 'Adjust search or filters to find orders.',
     },
     status: {
       assigned: 'Assigned',

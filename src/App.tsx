@@ -70,6 +70,7 @@ type RouteState =
 
 type AdminTab = 'dashboard' | 'orders' | 'couriers' | 'clients' | 'shops' | 'history'
 type ClientTab = 'dashboard' | 'orders' | 'newOrder'
+type OrderStatusFilter = DeliveryStatus | 'all'
 
 type Copy = typeof translations['pt-BR']
 
@@ -89,6 +90,7 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null)
 
 const activeStatuses: DeliveryStatus[] = ['assigned', 'pickup', 'in_transit', 'delayed']
+const statusFilterValues: OrderStatusFilter[] = ['all', 'queued', 'assigned', 'pickup', 'in_transit', 'delayed', 'delivered', 'cancelled']
 
 const destinationOptions = [
   { label: 'Rua Oscar Freire, 620 - Jardins', address: 'Rua Oscar Freire, 620 - Jardins, Sao Paulo', point: { lat: -23.561325, lng: -46.669402 } },
@@ -459,9 +461,9 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
   const { copy, locale } = useI18n()
   const [tab, setTab] = useState<AdminTab>('dashboard')
   const [search, setSearch] = useState('')
-  const filteredOrders = snapshot.orders.filter((order) => matchesOrder(order, search))
+  const filteredOrders = sortOrdersByPriority(snapshot.orders.filter((order) => matchesOrder(order, search)))
   const activeOrders = snapshot.orders.filter((order) => activeStatuses.includes(order.status))
-  const deliveredToday = snapshot.orders.filter((order) => order.status === 'delivered').length + 156
+  const deliveredToday = snapshot.orders.filter((order) => order.status === 'delivered').length
   const delayed = snapshot.orders.filter((order) => order.status === 'delayed')
   const onlineCouriers = snapshot.couriers.filter((courier) => courier.status !== 'offline')
   const notifications = makeNotificationItems(snapshot.events, snapshot.orders, copy, locale)
@@ -488,10 +490,10 @@ function AdminPage({ assignOrder, changeOrderStatus, logout, routePlan, saveShop
         {tab === 'orders' ? (
           <OrdersAdminView assignOrder={assignOrder} changeOrderStatus={changeOrderStatus} orders={filteredOrders} selectedOrder={selectedOrder} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
         ) : null}
-        {tab === 'couriers' ? <CouriersAdminView couriers={snapshot.couriers} orders={snapshot.orders} setCourierStatus={setCourierStatus} /> : null}
-        {tab === 'clients' ? <ClientsAdminView snapshot={snapshot} /> : null}
-        {tab === 'shops' ? <ShopsAdminView saveShop={saveShop} snapshot={snapshot} /> : null}
-        {tab === 'history' ? <HistoryAdminView events={snapshot.events} orders={snapshot.orders} /> : null}
+        {tab === 'couriers' ? <CouriersAdminView couriers={snapshot.couriers} orders={snapshot.orders} search={search} setCourierStatus={setCourierStatus} /> : null}
+        {tab === 'clients' ? <ClientsAdminView search={search} snapshot={snapshot} /> : null}
+        {tab === 'shops' ? <ShopsAdminView saveShop={saveShop} search={search} snapshot={snapshot} /> : null}
+        {tab === 'history' ? <HistoryAdminView events={snapshot.events} orders={snapshot.orders} search={search} /> : null}
         {tab !== 'dashboard' ? <div className="panel-spacer" /> : null}
       </section>
     </main>
@@ -532,7 +534,7 @@ function WorkspaceTopbar({ notifications = [], search, setSearch, title }: { not
   return (
     <header className="workspace-topbar">
       <h1>{title}</h1>
-      <div className="workspace-search"><Search size={15} /><input placeholder={copy.topbar.searchPlaceholder} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+      <div className="workspace-search"><Search size={15} /><input aria-label={copy.topbar.searchPlaceholder} placeholder={copy.topbar.searchPlaceholder} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
       <div className="notifications-menu">
         <button className="icon-button" aria-expanded={open} aria-label={copy.topbar.notifications} onClick={() => setOpen((current) => !current)} type="button">
           <Bell size={16} />
@@ -579,16 +581,16 @@ function AdminDashboard({ activeOrders, assignOrder, deliveredToday, delayed, on
   return (
     <>
       <section className="kpi-grid">
-        <KpiCard icon={<PackageCheck size={16} />} label={copy.admin.activeOrders} value={String(activeOrders.length + 42)} />
-        <KpiCard icon={<Clock3 size={16} />} label={copy.admin.pendingDispatch} value={String(pendingOrders.length + 12)} tone="amber" />
-        <KpiCard icon={<Bike size={16} />} label={copy.admin.onlineCouriers} value={String(onlineCouriers.length + 18)} />
+        <KpiCard icon={<PackageCheck size={16} />} label={copy.admin.activeOrders} value={String(activeOrders.length)} />
+        <KpiCard icon={<Clock3 size={16} />} label={copy.admin.pendingDispatch} value={String(pendingOrders.length)} tone="amber" />
+        <KpiCard icon={<Bike size={16} />} label={copy.admin.onlineCouriers} value={String(onlineCouriers.length)} />
         <KpiCard icon={<CheckCircle2 size={16} />} label={copy.admin.deliveredToday} value={String(deliveredToday)} />
-        <KpiCard icon={<AlertTriangle size={16} />} label={copy.admin.delayed} value={String(delayed.length + 3)} tone="red" />
+        <KpiCard icon={<AlertTriangle size={16} />} label={copy.admin.delayed} value={String(delayed.length)} tone="red" />
       </section>
       <section className="dashboard-content-grid">
         <div className="panel active-queue-panel">
-          <PanelTitle action={copy.admin.total(snapshot.orders.length + 42)} title={copy.admin.activeQueue} />
-          <OrderQueue orders={snapshot.orders} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
+          <PanelTitle action={copy.admin.total(snapshot.orders.length)} title={copy.admin.activeQueue} />
+          <OrderQueue orders={sortOrdersByPriority(snapshot.orders)} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
         </div>
         <div className="panel map-panel">
           <PanelTitle action={routePlan?.provider === 'osrm' ? copy.admin.routeSynced : copy.admin.fallbackEta} title={copy.admin.liveMap} />
@@ -610,11 +612,21 @@ function OrdersAdminView({ assignOrder, changeOrderStatus, orders, selectedOrder
   snapshot: AppSnapshot
 }) {
   const { copy, locale } = useI18n()
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
+  const visibleOrders = orders.filter((order) => matchesStatusFilter(order, statusFilter))
+
+  useEffect(() => {
+    if (visibleOrders.length && !visibleOrders.some((order) => order.id === selectedOrderId)) {
+      setSelectedOrderId(visibleOrders[0].id)
+    }
+  }, [selectedOrderId, setSelectedOrderId, visibleOrders])
+
   return (
     <section className="admin-two-column">
       <div className="panel">
-        <PanelTitle action={copy.admin.ordersCount(orders.length)} title={copy.admin.ordersTitle} />
-        <OrderQueue orders={orders} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
+        <PanelTitle action={copy.admin.ordersCount(visibleOrders.length)} title={copy.admin.ordersTitle} />
+        <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+        <OrderQueue orders={visibleOrders} selectedOrderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
       </div>
       <div className="panel detail-admin-panel">
         {selectedOrder ? (
@@ -636,11 +648,12 @@ function OrdersAdminView({ assignOrder, changeOrderStatus, orders, selectedOrder
   )
 }
 
-function CouriersAdminView({ couriers, orders, setCourierStatus }: { couriers: Courier[]; orders: Order[]; setCourierStatus: (courier: Courier, status: CourierStatus) => void }) {
+function CouriersAdminView({ couriers, orders, search, setCourierStatus }: { couriers: Courier[]; orders: Order[]; search: string; setCourierStatus: (courier: Courier, status: CourierStatus) => void }) {
   const { copy, locale } = useI18n()
+  const visibleCouriers = couriers.filter((courier) => matchesCourier(courier, search))
   return (
     <section className="cards-grid-view">
-      {couriers.map((courier) => {
+      {visibleCouriers.length ? visibleCouriers.map((courier) => {
         const activeCourierOrders = orders.filter((order) => order.assignedCourierId === courier.id && activeStatuses.includes(order.status))
         const activeOrder = activeCourierOrders[0] ?? null
         const operationalLabel = courier.status === 'offline'
@@ -661,21 +674,22 @@ function CouriersAdminView({ couriers, orders, setCourierStatus }: { couriers: C
             </div>
           </article>
         )
-      })}
+      }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
     </section>
   )
 }
 
-function ClientsAdminView({ snapshot }: { snapshot: AppSnapshot }) {
+function ClientsAdminView({ search, snapshot }: { search: string; snapshot: AppSnapshot }) {
   const { copy } = useI18n()
   const clients = snapshot.profiles.filter((profile) => profile.role === 'client')
+  const visibleClients = clients.filter((client) => matchesProfile(client, search))
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id ?? '')
   const selectedClient = clients.find((client) => client.id === selectedClientId) ?? clients[0] ?? null
 
   return (
     <section className="admin-detail-layout">
       <div className="entity-selection-list">
-        {clients.map((client) => {
+        {visibleClients.length ? visibleClients.map((client) => {
           const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === client.id)
           return (
             <button className={`panel entity-card entity-card-button ${selectedClient?.id === client.id ? 'selected' : ''}`} key={client.id} onClick={() => setSelectedClientId(client.id)} type="button">
@@ -685,7 +699,7 @@ function ClientsAdminView({ snapshot }: { snapshot: AppSnapshot }) {
               <div className="detail-metrics"><span>{copy.admin.clientOrderCount(clientOrders.length)}</span><span>{copy.admin.activeCount(clientOrders.filter((order) => activeStatuses.includes(order.status)).length)}</span></div>
             </button>
           )
-        })}
+        }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
       </div>
       <ClientAdminDetail client={selectedClient} snapshot={snapshot} />
     </section>
@@ -720,18 +734,19 @@ function ClientAdminDetail({ client, snapshot }: { client: Profile | null; snaps
   )
 }
 
-function ShopsAdminView({ saveShop, snapshot }: { saveShop: (input: ShopInput, shopId?: string) => Promise<void>; snapshot: AppSnapshot }) {
+function ShopsAdminView({ saveShop, search, snapshot }: { saveShop: (input: ShopInput, shopId?: string) => Promise<void>; search: string; snapshot: AppSnapshot }) {
   const { copy } = useI18n()
   const [selectedShopId, setSelectedShopId] = useState(snapshot.shops[0]?.id ?? '')
   const selectedShop = snapshot.shops.find((shop) => shop.id === selectedShopId) ?? snapshot.shops[0] ?? null
+  const visibleShops = snapshot.shops.filter((shop) => matchesShop(shop, search))
 
   return (
     <section className="admin-three-column shops-layout">
       <ShopForm saveShop={saveShop} />
       <div className="panel">
-        <PanelTitle action={copy.admin.shopsCount(snapshot.shops.length)} title={copy.admin.shopsTitle} />
+        <PanelTitle action={copy.admin.shopsCount(visibleShops.length)} title={copy.admin.shopsTitle} />
         <div className="entity-list">
-          {snapshot.shops.map((shop) => (
+          {visibleShops.length ? visibleShops.map((shop) => (
             <article className={`shop-row ${selectedShop?.id === shop.id ? 'selected' : ''}`} key={shop.id}>
               <button className="shop-row-main" onClick={() => setSelectedShopId(shop.id)} type="button">
                 <span className="entity-icon"><Store size={17} /></span>
@@ -742,7 +757,7 @@ function ShopsAdminView({ saveShop, snapshot }: { saveShop: (input: ShopInput, s
                 <button className="button-soft" onClick={() => void saveShop({ ...shop, active: !shop.active }, shop.id)} type="button">{shop.active ? copy.admin.shopActive : copy.admin.shopInactive}</button>
               </div>
             </article>
-          ))}
+          )) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
         </div>
       </div>
       <ShopAdminDetail shop={selectedShop} snapshot={snapshot} />
@@ -810,22 +825,25 @@ function ShopForm({ saveShop }: { saveShop: (input: ShopInput, shopId?: string) 
   return (
     <form className="panel order-form" onSubmit={(event) => void submit(event)}>
       <PanelTitle action={copy.admin.registration} title={copy.admin.shopFormTitle} />
-      <label>{copy.admin.name}<input value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label>{copy.admin.address}<input value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-      <label>{copy.admin.contact}<input value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
-      <label>{copy.admin.phone}<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+      <label>{copy.admin.name}<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>{copy.admin.address}<input required value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+      <label>{copy.admin.contact}<input required value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
+      <label>{copy.admin.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
       <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.admin.saveShop}</button>
     </form>
   )
 }
 
-function HistoryAdminView({ events, orders }: { events: DeliveryEvent[]; orders: Order[] }) {
+function HistoryAdminView({ events, orders, search }: { events: DeliveryEvent[]; orders: Order[]; search: string }) {
   const { copy, locale } = useI18n()
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
+  const visibleEvents = events.filter((event) => matchesStatusFilter(event, statusFilter) && matchesHistoryEvent(event, orders, search))
   return (
     <section className="panel history-panel">
-      <PanelTitle action={copy.admin.eventsCount(events.length)} title={copy.admin.historyTitle} />
+      <PanelTitle action={copy.admin.eventsCount(visibleEvents.length)} title={copy.admin.historyTitle} />
+      <StatusFilter value={statusFilter} onChange={setStatusFilter} />
       <div className="timeline-list">
-        {events.map((event) => {
+        {visibleEvents.length ? visibleEvents.map((event) => {
           const order = orders.find((item) => item.id === event.orderId)
           return (
             <article className="timeline-row" key={event.id}>
@@ -834,7 +852,7 @@ function HistoryAdminView({ events, orders }: { events: DeliveryEvent[]; orders:
               <time>{new Date(event.createdAt).toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
             </article>
           )
-        })}
+        }) : <EmptyBlock title={copy.filters.noResultsTitle} text={copy.filters.noResultsText} />}
       </div>
     </section>
   )
@@ -1019,13 +1037,22 @@ function ClientOrdersView({ eta, orders, routePlan, selectedLocation, selectedOr
   snapshot: AppSnapshot
 }) {
   const { copy, locale } = useI18n()
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
+  const visibleOrders = orders.filter((order) => matchesStatusFilter(order, statusFilter))
+
+  useEffect(() => {
+    if (visibleOrders.length && !visibleOrders.some((order) => order.id === selectedOrder?.id)) {
+      setSelectedOrderId(visibleOrders[0].id)
+    }
+  }, [selectedOrder?.id, setSelectedOrderId, visibleOrders])
 
   return (
     <section className="client-orders-layout">
       <div className="panel client-orders-panel">
-        <PanelTitle action={copy.admin.ordersCount(orders.length)} title={copy.client.ordersTitle} />
+        <PanelTitle action={copy.admin.ordersCount(visibleOrders.length)} title={copy.client.ordersTitle} />
         <p className="section-lede">{copy.client.ordersSubtitle}</p>
-        <OrderQueue orders={orders} selectedOrderId={selectedOrder?.id ?? ''} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
+        <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+        <OrderQueue orders={visibleOrders} selectedOrderId={selectedOrder?.id ?? ''} setSelectedOrderId={setSelectedOrderId} snapshot={snapshot} />
       </div>
       <div className="panel client-order-detail-panel">
         {selectedOrder ? (
@@ -1086,10 +1113,10 @@ function ClientNewOrderView({ activeShops, destinationIndex, itemName, phone, se
       </div>
       <form className="panel order-form new-order-form" onSubmit={(event) => void submitOrder(event)}>
         <PanelTitle action={copy.client.online} title={copy.client.formSection} />
-        <label>{copy.client.origin}<select value={shopId} onChange={(event) => setShopId(event.target.value)}>{activeShops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
-        <label>{copy.client.destination}<select value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>{destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}</select></label>
-        <label>{copy.client.item}<input value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
-        <label>{copy.client.phone}<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+        <label>{copy.client.origin}<select required value={shopId} onChange={(event) => setShopId(event.target.value)}>{activeShops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select></label>
+        <label>{copy.client.destination}<select required value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>{destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}</select></label>
+        <label>{copy.client.item}<input required value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>
+        <label>{copy.client.phone}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
         <button className="button-primary full" type="submit"><PlusCircle size={16} /> {copy.client.createOrder}</button>
       </form>
     </section>
@@ -1137,6 +1164,8 @@ function CourierPage({ applyLocation, assignOrder, changeOrderStatus, logout, ma
 }) {
   const { copy, locale } = useI18n()
   const courier = snapshot.couriers.find((item) => item.profileId === session.id) ?? snapshot.couriers[0]
+  const courierOrders = courier ? snapshot.orders.filter((item) => item.assignedCourierId === courier.id) : []
+  const courierHistory = courierOrders.filter((item) => item.status === 'delivered' || item.status === 'cancelled')
   const order = snapshot.orders.find((item) => item.assignedCourierId === courier?.id && activeStatuses.includes(item.status)) ?? null
   const currentLocation = courier ? snapshot.locations.find((item) => item.courierId === courier.id) ?? null : null
   const [availablePosition, setAvailablePosition] = useState<CourierLocation | null>(null)
@@ -1320,6 +1349,7 @@ function CourierPage({ applyLocation, assignOrder, changeOrderStatus, logout, ma
               <EmptyBlock title={copy.courier.noAvailableOrdersTitle} text={copy.courier.noAvailableOrdersText} />
             )}
           </div>
+          <CourierHistoryList orders={courierHistory} />
         </section>
       </main>
     )
@@ -1351,8 +1381,34 @@ function CourierPage({ applyLocation, assignOrder, changeOrderStatus, logout, ma
   )
 }
 
+function CourierHistoryList({ orders }: { orders: Order[] }) {
+  const { copy, locale } = useI18n()
+  const recentOrders = orders.slice(0, 4)
+
+  return (
+    <div className="courier-history-panel">
+      <PanelTitle action={copy.courier.completedCount(orders.length)} title={copy.courier.historyTitle} />
+      {recentOrders.length ? (
+        <div className="detail-list">
+          {recentOrders.map((order) => (
+            <article className="small-entity-row courier-history-row" key={order.id}>
+              <span className={`status-pill ${order.status}`}>{statusLabel(order.status, locale)}</span>
+              <strong>{order.number} · {order.customerName}</strong>
+              <span>{shortAddress(order.destinationAddress)} · {formatCurrency(order.totalCents, locale)}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyBlock title={copy.courier.noHistoryTitle} text={copy.courier.noHistoryText} />
+      )}
+    </div>
+  )
+}
+
 function OrderQueue({ orders, selectedOrderId, setSelectedOrderId, snapshot }: { orders: Order[]; selectedOrderId: string; setSelectedOrderId: (id: string) => void; snapshot: AppSnapshot }) {
   const { copy, locale } = useI18n()
+  if (!orders.length) return <EmptyBlock title={copy.queue.emptyTitle} text={copy.queue.emptyText} />
+
   return (
     <div className="queue-list">
       {orders.map((order) => {
@@ -1366,6 +1422,23 @@ function OrderQueue({ orders, selectedOrderId, setSelectedOrderId, snapshot }: {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+function StatusFilter({ onChange, value }: { onChange: (value: OrderStatusFilter) => void; value: OrderStatusFilter }) {
+  const { copy, locale } = useI18n()
+
+  return (
+    <div className="filter-bar">
+      <label className="filter-field">
+        <span>{copy.filters.status}</span>
+        <select value={value} onChange={(event) => onChange(event.target.value as OrderStatusFilter)}>
+          {statusFilterValues.map((status) => (
+            <option key={status} value={status}>{status === 'all' ? copy.filters.allStatuses : statusLabel(status, locale)}</option>
+          ))}
+        </select>
+      </label>
     </div>
   )
 }
@@ -1462,6 +1535,25 @@ function sortAvailableOrdersByDistance(orders: Order[], location: CourierLocatio
     })
 }
 
+function sortOrdersByPriority(orders: Order[]) {
+  const priority: Record<DeliveryStatus, number> = {
+    delayed: 0,
+    queued: 1,
+    assigned: 2,
+    pickup: 3,
+    in_transit: 4,
+    delivered: 5,
+    cancelled: 6,
+  }
+
+  return [...orders].sort((left, right) => {
+    const statusDelta = priority[left.status] - priority[right.status]
+    if (statusDelta !== 0) return statusDelta
+
+    return new Date(left.promisedAt).getTime() - new Date(right.promisedAt).getTime()
+  })
+}
+
 function formatDistanceKm(distanceKm: number, locale: Locale) {
   if (distanceKm < 1) return `${Math.max(20, Math.round(distanceKm * 1000))} m`
 
@@ -1491,13 +1583,55 @@ function orderBelongsToShop(order: Order, shop: Shop) {
 }
 
 function normalizeText(value: string) {
-  return value.trim().toLowerCase()
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+}
+
+function includesSearch(values: Array<string | number | null | undefined>, search: string) {
+  const query = normalizeText(search)
+  if (!query) return true
+
+  return values.some((value) => normalizeText(String(value ?? '')).includes(query))
+}
+
+function matchesStatusFilter(item: { status: DeliveryStatus }, statusFilter: OrderStatusFilter) {
+  return statusFilter === 'all' || item.status === statusFilter
 }
 
 function matchesOrder(order: Order, search: string) {
-  const value = search.trim().toLowerCase()
-  if (!value) return true
-  return [order.number, order.customerName, order.merchantName, order.destinationAddress].some((item) => item.toLowerCase().includes(value))
+  return includesSearch([
+    order.number,
+    order.customerName,
+    order.customerPhone,
+    order.merchantName,
+    order.pickupAddress,
+    order.destinationAddress,
+    order.items.map((item) => item.name).join(' '),
+  ], search)
+}
+
+function matchesCourier(courier: Courier, search: string) {
+  return includesSearch([courier.name, courier.phone, courier.vehicle, courier.plate, courier.status], search)
+}
+
+function matchesProfile(profile: Profile, search: string) {
+  return includesSearch([profile.name, profile.email, profile.role], search)
+}
+
+function matchesShop(shop: Shop, search: string) {
+  return includesSearch([shop.name, shop.address, shop.contactName, shop.phone, shop.active ? 'active ativa' : 'inactive inativa'], search)
+}
+
+function matchesHistoryEvent(event: DeliveryEvent, orders: Order[], search: string) {
+  const order = orders.find((item) => item.id === event.orderId)
+  return includesSearch([
+    event.actorName,
+    event.message,
+    event.status,
+    order?.number,
+    order?.customerName,
+    order?.merchantName,
+    order?.destinationAddress,
+  ], search)
 }
 
 function shortAddress(address: string) {
