@@ -27,6 +27,18 @@ export type Courier = {
   status: CourierStatus
 }
 
+export type Shop = {
+  id: string
+  name: string
+  address: string
+  contactName: string
+  phone: string
+  lat: number
+  lng: number
+  active: boolean
+  createdAt: string
+}
+
 export type OrderItem = {
   name: string
   quantity: number
@@ -76,7 +88,9 @@ export type DeliveryEvent = {
 }
 
 export type AppSnapshot = {
+  profiles: Profile[]
   couriers: Courier[]
+  shops: Shop[]
   orders: Order[]
   locations: CourierLocation[]
   events: DeliveryEvent[]

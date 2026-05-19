@@ -1,4 +1,4 @@
-import type { AppSnapshot, Courier, CourierLocation, DeliveryEvent, Order, Profile } from '../types'
+import type { AppSnapshot, Courier, CourierLocation, DeliveryEvent, Order, Profile, Shop } from '../types'
 
 const now = new Date()
 
@@ -53,6 +53,42 @@ export const demoCouriers: Courier[] = [
     plate: 'DGR-2A71',
     rating: 4.75,
     status: 'offline',
+  },
+]
+
+export const demoShops: Shop[] = [
+  {
+    id: 'shop-bistro-avenida',
+    name: 'Bistro Avenida',
+    address: 'Av. Paulista, 1578 - Bela Vista, Sao Paulo',
+    contactName: 'Julia Moraes',
+    phone: '+55 11 3333-1001',
+    lat: -23.561684,
+    lng: -46.655981,
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 21).toISOString(),
+  },
+  {
+    id: 'shop-mercado-central',
+    name: 'Mercado Central Express',
+    address: 'Rua Augusta, 1600 - Consolacao, Sao Paulo',
+    contactName: 'Paulo Vieira',
+    phone: '+55 11 3333-1002',
+    lat: -23.555421,
+    lng: -46.662089,
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 18).toISOString(),
+  },
+  {
+    id: 'shop-farmacia-jardins',
+    name: 'Farmacia Jardins',
+    address: 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo',
+    contactName: 'Nadia Lima',
+    phone: '+55 11 3333-1003',
+    lat: -23.566076,
+    lng: -46.656292,
+    active: true,
+    createdAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString(),
   },
 ]
 
@@ -172,7 +208,9 @@ export const demoEvents: DeliveryEvent[] = [
 ]
 
 export const demoSnapshot: AppSnapshot = {
+  profiles: demoProfiles,
   couriers: demoCouriers,
+  shops: demoShops,
   orders: demoOrders,
   locations: demoLocations,
   events: demoEvents,

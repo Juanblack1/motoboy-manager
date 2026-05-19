@@ -42,6 +42,9 @@ const ids = {
   courierRafael: '11111111-1111-4111-8111-111111111111',
   courierLuiza: '22222222-2222-4222-8222-222222222222',
   courierDiego: '33333333-3333-4333-8333-333333333333',
+  shopBistro: '44444444-4444-4444-8444-444444444441',
+  shopMercado: '44444444-4444-4444-8444-444444444442',
+  shopFarmacia: '44444444-4444-4444-8444-444444444443',
   order1001: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1001',
   order1002: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1002',
   order1003: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1003',
@@ -53,12 +56,12 @@ try {
   const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8')
   await client.query(schema)
 
-const adminUser = await upsertAuthUser(demoUsers.admin)
-const courierUser = await upsertAuthUser(demoUsers.courier)
-const clientUser = await upsertAuthUser(demoUsers.client)
+  const adminUser = await upsertAuthUser(demoUsers.admin)
+  const courierUser = await upsertAuthUser(demoUsers.courier)
+  const clientUser = await upsertAuthUser(demoUsers.client)
 
-await upsertProfiles(adminUser, courierUser, clientUser)
-await seedOperationalData(adminUser, courierUser, clientUser)
+  await upsertProfiles(adminUser, courierUser, clientUser)
+  await seedOperationalData(adminUser, courierUser, clientUser)
 
   console.log('Supabase configurado com sucesso.')
   console.log(`Admin demo: ${demoUsers.admin.email}`)
@@ -200,6 +203,23 @@ async function seedOperationalData(adminUser, courierUser, clientUser) {
          rating = excluded.rating,
          status = excluded.status`,
     [ids.courierRafael, courierUser.id, ids.courierLuiza, adminUser.id, ids.courierDiego],
+  )
+
+  await client.query(
+    `insert into public.shops (id, name, address, contact_name, phone, lat, lng, active)
+     values
+       ($1, 'Bistro Avenida', 'Av. Paulista, 1578 - Bela Vista, Sao Paulo', 'Julia Moraes', '+55 11 3333-1001', -23.561684, -46.655981, true),
+       ($2, 'Mercado Central Express', 'Rua Augusta, 1600 - Consolacao, Sao Paulo', 'Paulo Vieira', '+55 11 3333-1002', -23.555421, -46.662089, true),
+       ($3, 'Farmacia Jardins', 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo', 'Nadia Lima', '+55 11 3333-1003', -23.566076, -46.656292, true)
+     on conflict (id) do update
+     set name = excluded.name,
+         address = excluded.address,
+         contact_name = excluded.contact_name,
+         phone = excluded.phone,
+         lat = excluded.lat,
+         lng = excluded.lng,
+         active = excluded.active`,
+    [ids.shopBistro, ids.shopMercado, ids.shopFarmacia],
   )
 
   await client.query(

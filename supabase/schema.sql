@@ -20,6 +20,18 @@ create table if not exists public.couriers (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.shops (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  address text not null,
+  contact_name text not null,
+  phone text not null,
+  lat double precision not null,
+  lng double precision not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   number text not null unique,
@@ -72,10 +84,12 @@ create table if not exists public.courier_locations (
 create index if not exists orders_assigned_courier_id_idx on public.orders(assigned_courier_id);
 create index if not exists orders_client_profile_id_idx on public.orders(client_profile_id);
 create index if not exists orders_public_code_idx on public.orders(public_code);
+create index if not exists shops_active_idx on public.shops(active);
 create index if not exists delivery_events_order_id_idx on public.delivery_events(order_id);
 
 alter table public.profiles enable row level security;
 alter table public.couriers enable row level security;
+alter table public.shops enable row level security;
 alter table public.orders enable row level security;
 alter table public.delivery_events enable row level security;
 alter table public.courier_locations enable row level security;
@@ -169,6 +183,17 @@ using (
 
 drop policy if exists "couriers admin manage" on public.couriers;
 create policy "couriers admin manage" on public.couriers
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "shops read active or admin" on public.shops;
+create policy "shops read active or admin" on public.shops
+for select to authenticated
+using (active or public.is_admin());
+
+drop policy if exists "shops admin manage" on public.shops;
+create policy "shops admin manage" on public.shops
 for all to authenticated
 using (public.is_admin())
 with check (public.is_admin());
@@ -269,5 +294,11 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table public.delivery_events;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.shops;
 exception when duplicate_object then null;
 end $$;

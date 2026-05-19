@@ -43,6 +43,9 @@ const ids = {
   courierRafael: '11111111-1111-4111-8111-111111111111',
   courierLuiza: '22222222-2222-4222-8222-222222222222',
   courierDiego: '33333333-3333-4333-8333-333333333333',
+  shopBistro: '44444444-4444-4444-8444-444444444441',
+  shopMercado: '44444444-4444-4444-8444-444444444442',
+  shopFarmacia: '44444444-4444-4444-8444-444444444443',
   order1001: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1001',
   order1002: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1002',
   order1003: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1003',
@@ -103,6 +106,39 @@ await upsert('couriers', [
     plate: 'DGR-2A71',
     rating: 4.75,
     status: 'offline',
+  },
+])
+
+await upsert('shops', [
+  {
+    id: ids.shopBistro,
+    name: 'Bistro Avenida',
+    address: 'Av. Paulista, 1578 - Bela Vista, Sao Paulo',
+    contact_name: 'Julia Moraes',
+    phone: '+55 11 3333-1001',
+    lat: -23.561684,
+    lng: -46.655981,
+    active: true,
+  },
+  {
+    id: ids.shopMercado,
+    name: 'Mercado Central Express',
+    address: 'Rua Augusta, 1600 - Consolacao, Sao Paulo',
+    contact_name: 'Paulo Vieira',
+    phone: '+55 11 3333-1002',
+    lat: -23.555421,
+    lng: -46.662089,
+    active: true,
+  },
+  {
+    id: ids.shopFarmacia,
+    name: 'Farmacia Jardins',
+    address: 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo',
+    contact_name: 'Nadia Lima',
+    phone: '+55 11 3333-1003',
+    lat: -23.566076,
+    lng: -46.656292,
+    active: true,
   },
 ])
 

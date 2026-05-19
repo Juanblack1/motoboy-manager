@@ -1,17 +1,27 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
-import { demoProfiles, demoSnapshot } from './demo-data'
+import { demoProfiles, demoShops, demoSnapshot } from './demo-data'
 import { appCredentials, hasSupabaseConfig, supabase } from './supabase'
 import type {
   AppSnapshot,
   Courier,
+  CourierStatus,
   CourierLocation,
   DeliveryEvent,
   DeliveryStatus,
   Order,
+  Profile,
   Role,
   SessionUser,
+  Shop,
 } from '../types'
+
+type ProfileRow = {
+  id: string
+  name: string
+  email: string
+  role: Role
+}
 
 type OrderRow = {
   id: string
@@ -48,6 +58,18 @@ type CourierRow = {
   status: Courier['status']
 }
 
+type ShopRow = {
+  id: string
+  name: string
+  address: string
+  contact_name: string
+  phone: string
+  lat: number
+  lng: number
+  active: boolean
+  created_at: string
+}
+
 type LocationRow = {
   courier_id: string
   order_id: string | null
@@ -80,6 +102,16 @@ export type CreateOrderInput = {
   destination: { lat: number; lng: number }
   totalCents: number
   items: Array<{ name: string; quantity: number }>
+}
+
+export type ShopInput = {
+  name: string
+  address: string
+  contactName: string
+  phone: string
+  lat: number
+  lng: number
+  active: boolean
 }
 
 export async function signInWithDemoRole(role: Role): Promise<SessionUser> {
@@ -122,20 +154,26 @@ export async function signOut() {
 export async function loadSnapshot(): Promise<AppSnapshot> {
   if (!supabase) return demoSnapshot
 
-  const [couriers, orders, locations, events] = await Promise.all([
+  const [profiles, couriers, shops, orders, locations, events] = await Promise.all([
+    supabase.from('profiles').select('*').order('name'),
     supabase.from('couriers').select('*').order('name'),
+    supabase.from('shops').select('*').order('name'),
     supabase.from('orders').select('*').order('created_at', { ascending: false }),
     supabase.from('courier_locations').select('*'),
     supabase.from('delivery_events').select('*').order('created_at', { ascending: false }).limit(20),
   ])
 
+  if (profiles.error) throw profiles.error
   if (couriers.error) throw couriers.error
+  if (shops.error && !isMissingShopsTable(shops.error)) throw shops.error
   if (orders.error) throw orders.error
   if (locations.error) throw locations.error
   if (events.error) throw events.error
 
   return {
+    profiles: (profiles.data as ProfileRow[]).map(mapProfile),
     couriers: (couriers.data as CourierRow[]).map(mapCourier),
+    shops: shops.error ? demoShops : (shops.data as ShopRow[]).map(mapShop),
     orders: (orders.data as OrderRow[]).map(mapOrder),
     locations: (locations.data as LocationRow[]).map(mapLocation),
     events: (events.data as EventRow[]).map(mapEvent),
@@ -216,6 +254,47 @@ export async function assignOrderToCourier(orderId: string, courierId: string, a
   })
 }
 
+export async function updateCourierStatus(courierId: string, status: CourierStatus) {
+  if (!supabase) return
+
+  const { error } = await supabase.from('couriers').update({ status }).eq('id', courierId)
+  if (error) throw error
+}
+
+export async function upsertShop(input: ShopInput, shopId?: string): Promise<Shop> {
+  const shop: Shop = {
+    id: shopId ?? crypto.randomUUID(),
+    name: input.name,
+    address: input.address,
+    contactName: input.contactName,
+    phone: input.phone,
+    lat: input.lat,
+    lng: input.lng,
+    active: input.active,
+    createdAt: new Date().toISOString(),
+  }
+
+  if (!supabase) return shop
+
+  const { data, error } = await supabase
+    .from('shops')
+    .upsert({
+      id: shop.id,
+      name: shop.name,
+      address: shop.address,
+      contact_name: shop.contactName,
+      phone: shop.phone,
+      lat: shop.lat,
+      lng: shop.lng,
+      active: shop.active,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return mapShop(data as ShopRow)
+}
+
 export async function updateOrderStatus(orderId: string, status: DeliveryStatus, actorName: string) {
   if (!supabase) return
 
@@ -256,6 +335,7 @@ export function subscribeToOperations(onChange: () => void): RealtimeChannel | n
   return supabase
     .channel('operations')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shops' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'courier_locations' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_events' }, onChange)
     .subscribe()
@@ -290,6 +370,15 @@ function mapOrder(row: OrderRow): Order {
   }
 }
 
+function mapProfile(row: ProfileRow): Profile {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+  }
+}
+
 function mapCourier(row: CourierRow): Courier {
   return {
     id: row.id,
@@ -300,6 +389,20 @@ function mapCourier(row: CourierRow): Courier {
     plate: row.plate,
     rating: row.rating,
     status: row.status,
+  }
+}
+
+function mapShop(row: ShopRow): Shop {
+  return {
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    contactName: row.contact_name,
+    phone: row.phone,
+    lat: row.lat,
+    lng: row.lng,
+    active: row.active,
+    createdAt: row.created_at,
   }
 }
 
@@ -326,4 +429,8 @@ function mapEvent(row: EventRow): DeliveryEvent {
     message: row.message,
     createdAt: row.created_at,
   }
+}
+
+function isMissingShopsTable(error: { code?: string }) {
+  return error.code === '42P01' || error.code === 'PGRST205'
 }
