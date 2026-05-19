@@ -135,6 +135,19 @@ as $$
   );
 $$;
 
+create or replace function public.is_courier()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.couriers c
+    where c.profile_id = auth.uid()
+  );
+$$;
+
 create or replace function public.is_order_client(p_order_id uuid)
 returns boolean
 language sql
@@ -159,6 +172,40 @@ as $$
     select 1 from public.orders o
     where o.assigned_courier_id = p_courier_id and o.client_profile_id = auth.uid()
   );
+$$;
+
+create or replace function public.accept_order(p_order_id uuid, p_courier_id uuid, p_actor_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated integer;
+begin
+  if not (public.is_admin() or public.is_courier_for(p_courier_id)) then
+    raise exception 'Not allowed to accept this order';
+  end if;
+
+  update public.orders
+  set assigned_courier_id = p_courier_id,
+      status = 'assigned'
+  where id = p_order_id
+    and status = 'queued'
+    and assigned_courier_id is null;
+
+  get diagnostics v_updated = row_count;
+  if v_updated = 0 then
+    raise exception 'Order is no longer available';
+  end if;
+
+  update public.couriers
+  set status = 'busy'
+  where id = p_courier_id;
+
+  insert into public.delivery_events (order_id, actor_name, status, message)
+  values (p_order_id, coalesce(nullif(p_actor_name, ''), 'Motoboy'), 'assigned', 'Pedido aceito pelo motoboy.');
+end;
 $$;
 
 drop policy if exists "profiles read own or admin" on public.profiles;
@@ -205,6 +252,11 @@ using (
   public.is_admin()
   or client_profile_id = auth.uid()
   or public.is_courier_for(assigned_courier_id)
+  or (
+    status = 'queued'
+    and assigned_courier_id is null
+    and public.is_courier()
+  )
 );
 
 drop policy if exists "orders client create own" on public.orders;
@@ -276,8 +328,10 @@ drop function if exists public.get_public_tracking(text);
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_assigned_courier(uuid) to authenticated;
 grant execute on function public.is_courier_for(uuid) to authenticated;
+grant execute on function public.is_courier() to authenticated;
 grant execute on function public.is_order_client(uuid) to authenticated;
 grant execute on function public.client_can_read_courier(uuid) to authenticated;
+grant execute on function public.accept_order(uuid, uuid, text) to authenticated;
 
 do $$
 begin

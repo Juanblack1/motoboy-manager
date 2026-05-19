@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Luiza Neri courier portrait">
+  <rect width="240" height="240" rx="120" fill="#f8efe1"/>
+  <path d="M47 219c10-48 39-74 73-74s63 26 73 74H47Z" fill="#10211b"/>
+  <path d="M84 165h72l-8 55H92l-8-55Z" fill="#f59e0b"/>
+  <circle cx="120" cy="99" r="47" fill="#b8795f"/>
+  <path d="M73 93c2-37 24-58 55-58 35 0 56 25 41 71-24-22-62-20-96-13Z" fill="#3a241b"/>
+  <path d="M83 72c21-20 62-18 78 1 7 8 9 19 6 32-24-10-60-10-92 0-4-14 0-25 8-33Z" fill="#16a064"/>
+  <path d="M81 86h83v21H81z" fill="#fffaf0" opacity="0.9"/>
+  <circle cx="103" cy="107" r="5" fill="#10211b"/>
+  <circle cx="138" cy="107" r="5" fill="#10211b"/>
+  <path d="M105 130c10 7 21 7 31 0" fill="none" stroke="#10211b" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Courier avatar">
+  <rect width="240" height="240" rx="120" fill="#d9f7e8"/>
+  <circle cx="120" cy="94" r="48" fill="#8a5a44"/>
+  <path d="M54 220c9-47 35-72 66-72s57 25 66 72H54Z" fill="#10211b"/>
+  <path d="M83 65c8-27 65-30 77 0 8 19-2 35-40 35S75 84 83 65Z" fill="#16a064"/>
+  <path d="M83 66h75v22H83z" fill="#f59e0b" opacity="0.9"/>
+  <circle cx="102" cy="104" r="5" fill="#10211b"/>
+  <circle cx="138" cy="104" r="5" fill="#10211b"/>
+  <path d="M104 128c10 8 22 8 32 0" fill="none" stroke="#10211b" stroke-width="8" stroke-linecap="round"/>
+</svg>

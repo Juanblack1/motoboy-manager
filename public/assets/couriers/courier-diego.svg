@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Diego Ramos courier portrait">
+  <rect width="240" height="240" rx="120" fill="#e5efe8"/>
+  <path d="M48 220c10-49 38-76 72-76s62 27 72 76H48Z" fill="#10211b"/>
+  <path d="M88 164h64l-7 56H95l-7-56Z" fill="#16a064"/>
+  <circle cx="120" cy="100" r="48" fill="#7d5140"/>
+  <path d="M77 77c15-33 76-36 89 1 4 11 3 20 0 29-23-11-61-12-92 0-3-11-1-21 3-30Z" fill="#10211b"/>
+  <path d="M78 81h85v22H78z" fill="#f59e0b"/>
+  <circle cx="103" cy="108" r="5" fill="#10211b"/>
+  <circle cx="138" cy="108" r="5" fill="#10211b"/>
+  <path d="M105 130c10 8 21 8 31 0" fill="none" stroke="#10211b" stroke-width="8" stroke-linecap="round"/>
+</svg>

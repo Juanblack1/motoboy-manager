@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Rafael Motta courier portrait">
+  <defs><linearGradient id="bg" x1="36" y1="16" x2="206" y2="224"><stop stop-color="#fff0c2"/><stop offset="1" stop-color="#d9f7e8"/></linearGradient></defs>
+  <rect width="240" height="240" rx="120" fill="url(#bg)"/>
+  <path d="M47 219c10-50 38-75 73-75s63 25 73 75H47Z" fill="#10211b"/>
+  <path d="M83 164h74l-10 56H93l-10-56Z" fill="#16a064"/>
+  <circle cx="120" cy="99" r="48" fill="#9b6a50"/>
+  <path d="M72 87c4-39 31-58 68-48 22 6 35 24 32 48-27-13-66-14-100 0Z" fill="#10211b"/>
+  <path d="M78 78c19-20 67-25 85-2 7 9 8 18 5 28-24-9-59-9-92 0-4-10-3-19 2-26Z" fill="#16a064"/>
+  <path d="M78 86h88v22H78z" fill="#f59e0b"/>
+  <circle cx="103" cy="106" r="5" fill="#10211b"/>
+  <circle cx="139" cy="106" r="5" fill="#10211b"/>
+  <path d="M105 130c9 8 22 8 31 0" fill="none" stroke="#10211b" stroke-width="8" stroke-linecap="round"/>
+</svg>

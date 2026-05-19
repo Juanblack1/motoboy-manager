@@ -239,6 +239,16 @@ export async function createClientOrder(input: CreateOrderInput): Promise<Order>
 export async function assignOrderToCourier(orderId: string, courierId: string, actorName: string) {
   if (!supabase) return
 
+  const { error: rpcError } = await supabase.rpc('accept_order', {
+    p_actor_name: actorName,
+    p_courier_id: courierId,
+    p_order_id: orderId,
+  })
+
+  if (!rpcError) return
+
+  if (!isMissingRpc(rpcError)) throw rpcError
+
   const { error } = await supabase
     .from('orders')
     .update({ assigned_courier_id: courierId, status: 'assigned' })
@@ -433,4 +443,8 @@ function mapEvent(row: EventRow): DeliveryEvent {
 
 function isMissingShopsTable(error: { code?: string }) {
   return error.code === '42P01' || error.code === 'PGRST205'
+}
+
+function isMissingRpc(error: { code?: string; message?: string }) {
+  return error.code === 'PGRST202' || error.message?.includes('accept_order')
 }

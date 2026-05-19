@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" role="img" aria-label="Operations map dashboard artwork">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="920" y2="560"><stop stop-color="#fffaf0"/><stop offset="1" stop-color="#eef3ec"/></linearGradient>
+    <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#10211b" flood-opacity="0.14"/></filter>
+  </defs>
+  <rect width="920" height="560" rx="44" fill="url(#panel)"/>
+  <path d="M0 120h920M0 240h920M0 360h920M0 480h920M140 0v560M280 0v560M420 0v560M560 0v560M700 0v560M840 0v560" stroke="#10211b" stroke-opacity="0.07" stroke-width="2"/>
+  <path d="M108 438c110-88 180-24 270-126 68-78 72-170 170-194 87-21 138 38 252-32" fill="none" stroke="#fffaf0" stroke-width="28" stroke-linecap="round"/>
+  <path d="M108 438c110-88 180-24 270-126 68-78 72-170 170-194 87-21 138 38 252-32" fill="none" stroke="#16a064" stroke-width="10" stroke-linecap="round"/>
+  <g filter="url(#card-shadow)">
+    <rect x="46" y="50" width="250" height="150" rx="28" fill="#10211b"/>
+    <circle cx="94" cy="98" r="18" fill="#f59e0b"/>
+    <rect x="128" y="84" width="120" height="16" rx="8" fill="#fffaf0"/>
+    <rect x="80" y="132" width="176" height="14" rx="7" fill="#d9f7e8" opacity="0.7"/>
+  </g>
+  <g filter="url(#card-shadow)">
+    <rect x="620" y="334" width="244" height="156" rx="28" fill="#fffaf0"/>
+    <rect x="654" y="372" width="146" height="18" rx="9" fill="#10211b"/>
+    <rect x="654" y="410" width="176" height="16" rx="8" fill="#d9f7e8"/>
+    <rect x="654" y="446" width="122" height="16" rx="8" fill="#fff0c2"/>
+  </g>
+  <circle cx="108" cy="438" r="22" fill="#2563eb" stroke="#fffaf0" stroke-width="8"/>
+  <circle cx="378" cy="312" r="22" fill="#16a064" stroke="#fffaf0" stroke-width="8"/>
+  <circle cx="800" cy="86" r="22" fill="#f59e0b" stroke="#fffaf0" stroke-width="8"/>
+</svg>
