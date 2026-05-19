@@ -140,7 +140,7 @@ button:disabled {
 .home-grid,
 .dashboard-grid,
 .courier-layout,
-.tracking-page,
+.client-grid,
 .login-gate {
   margin: 0 auto;
   max-width: 1440px;
@@ -157,8 +157,9 @@ button:disabled {
 .launch-panel,
 .operation-column,
 .map-column,
+.client-panel,
+.client-map-panel,
 .phone-card,
-.tracking-card,
 .login-card {
   background: rgba(255, 250, 240, 0.88);
   border: 1px solid var(--line);
@@ -196,7 +197,7 @@ button:disabled {
 
 .hero-card h1,
 .login-card h1,
-.tracking-card h1,
+.client-panel h1,
 .phone-card h1,
 .section-heading h1 {
   color: var(--ink);
@@ -212,7 +213,7 @@ button:disabled {
 
 .hero-card p,
 .login-card p,
-.tracking-card p,
+.client-panel p,
 .phone-card p,
 .detail-panel p {
   color: var(--muted);
@@ -515,6 +516,13 @@ button:disabled {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.assignment-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .status-pill {
   align-items: center;
   background: rgba(16, 33, 27, 0.08);
@@ -602,23 +610,93 @@ button:disabled {
   padding: 36px;
 }
 
-.tracking-page {
+.client-grid {
   display: grid;
-  gap: 18px;
-  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 22px;
+  grid-template-columns: 360px 360px minmax(0, 1fr);
   min-height: calc(100vh - 132px);
 }
 
-.tracking-card,
+.client-panel,
+.client-map-panel,
 .login-card {
   align-self: start;
   padding: 30px;
 }
 
-.tracking-card h1,
+.client-panel h1,
 .login-card h1 {
   font-size: 54px;
   margin-bottom: 16px;
+}
+
+.client-orders {
+  max-height: calc(100vh - 132px);
+  overflow: auto;
+}
+
+.compact-heading {
+  margin-bottom: 14px;
+}
+
+.compact-heading h1 {
+  font-size: 38px;
+}
+
+.order-form {
+  display: grid;
+  gap: 14px;
+}
+
+.order-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.order-form input,
+.order-form select {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.client-map-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.client-detail-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.empty-map-state {
+  align-self: stretch;
+  background: rgba(255, 250, 240, 0.88);
+  border: 1px dashed rgba(16, 33, 27, 0.22);
+  border-radius: 30px;
+  display: grid;
+  min-height: 420px;
+  place-content: center;
+  text-align: center;
+}
+
+.empty-map-state h2 {
+  font-size: 34px;
+  letter-spacing: -0.05em;
+  margin: 0 0 8px;
+}
+
+.empty-map-state p {
+  color: var(--muted);
+  margin: 0;
 }
 
 .login-gate {
@@ -652,7 +730,7 @@ button:disabled {
 @media (max-width: 1100px) {
   .home-grid,
   .dashboard-grid,
-  .tracking-page {
+  .client-grid {
     grid-template-columns: 1fr;
   }
 
@@ -690,8 +768,9 @@ button:disabled {
   .launch-panel,
   .operation-column,
   .map-column,
+  .client-panel,
+  .client-map-panel,
   .phone-card,
-  .tracking-card,
   .login-card {
     border-radius: 26px;
   }
@@ -703,7 +782,8 @@ button:disabled {
   }
 
   .hero-actions .primary-button,
-  .hero-actions .secondary-button {
+  .hero-actions .secondary-button,
+  .hero-actions .ghost-button {
     width: 100%;
   }
 
@@ -712,7 +792,7 @@ button:disabled {
   }
 
   .section-heading h1,
-  .tracking-card h1,
+  .client-panel h1,
   .login-card h1 {
     font-size: 38px;
   }

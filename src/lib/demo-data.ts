@@ -15,6 +15,12 @@ export const demoProfiles: Profile[] = [
     email: 'motoboy@motoboy.demo',
     role: 'courier',
   },
+  {
+    id: 'demo-client-profile',
+    name: 'Camila Torres',
+    email: 'cliente@motoboy.demo',
+    role: 'client',
+  },
 ]
 
 export const demoCouriers: Courier[] = [
@@ -57,6 +63,7 @@ export const demoOrders: Order[] = [
     publicCode: 'SP-8K2M',
     customerName: 'Camila Torres',
     customerPhone: '+55 11 90000-1001',
+    clientProfileId: 'demo-client-profile',
     merchantName: 'Bistro Avenida',
     pickupAddress: 'Av. Paulista, 1578 - Bela Vista, Sao Paulo',
     destinationAddress: 'Rua Oscar Freire, 620 - Jardins, Sao Paulo',
@@ -80,6 +87,7 @@ export const demoOrders: Order[] = [
     publicCode: 'SP-4Q9Z',
     customerName: 'Bruno Martins',
     customerPhone: '+55 11 90000-1002',
+    clientProfileId: 'demo-client-profile',
     merchantName: 'Mercado Central Express',
     pickupAddress: 'Rua Augusta, 1600 - Consolacao, Sao Paulo',
     destinationAddress: 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo',
@@ -103,6 +111,7 @@ export const demoOrders: Order[] = [
     publicCode: 'SP-7L1A',
     customerName: 'Nadia Lima',
     customerPhone: '+55 11 90000-1003',
+    clientProfileId: 'demo-client-profile',
     merchantName: 'Farmacia Jardins',
     pickupAddress: 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo',
     destinationAddress: 'Rua Pamplona, 1005 - Jardim Paulista, Sao Paulo',
@@ -177,5 +186,9 @@ export const demoCredentials = {
   courier: {
     email: 'motoboy@motoboy.demo',
     password: 'Motoboy@123456',
+  },
+  client: {
+    email: 'cliente@motoboy.demo',
+    password: 'Cliente@123456',
   },
 }

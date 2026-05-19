@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'courier'
+export type Role = 'admin' | 'courier' | 'client'
 
 export type DeliveryStatus = 'queued' | 'assigned' | 'pickup' | 'in_transit' | 'delivered' | 'delayed' | 'cancelled'
 
@@ -38,6 +38,7 @@ export type Order = {
   publicCode: string
   customerName: string
   customerPhone: string
+  clientProfileId: string | null
   merchantName: string
   pickupAddress: string
   destinationAddress: string
@@ -93,10 +94,4 @@ export type SessionUser = {
   name: string
   role: Role
   email: string
-}
-
-export type PublicTracking = {
-  order: Order
-  courier: Courier | null
-  location: CourierLocation | null
 }

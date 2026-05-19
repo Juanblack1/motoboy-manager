@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_DEMO_ADMIN_PASSWORD?: string
   readonly VITE_DEMO_COURIER_EMAIL?: string
   readonly VITE_DEMO_COURIER_PASSWORD?: string
+  readonly VITE_DEMO_CLIENT_EMAIL?: string
+  readonly VITE_DEMO_CLIENT_PASSWORD?: string
 }
 
 interface ImportMeta {

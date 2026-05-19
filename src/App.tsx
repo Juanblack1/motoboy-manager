@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Bike,
   Clock3,
-  Copy,
-  ExternalLink,
   Gauge,
   LogOut,
   MapPin,
   Navigation,
   PackageCheck,
   Play,
+  PlusCircle,
   Radio,
   RefreshCw,
   ShieldCheck,
+  ShoppingBag,
   Smartphone,
   UserRound,
 } from 'lucide-react'
@@ -21,7 +21,8 @@ import { MapCanvas } from './components/MapCanvas'
 import { demoSnapshot } from './lib/demo-data'
 import { estimateEtaFromLocation, formatCurrency, getRoutePlan, interpolatePoint, statusLabel } from './lib/geo'
 import {
-  loadPublicTracking,
+  assignOrderToCourier,
+  createClientOrder,
   loadSnapshot,
   signInWithDemoRole,
   signOut,
@@ -29,17 +30,54 @@ import {
   unsubscribe,
   updateOrderStatus,
   upsertLocation,
+  type CreateOrderInput,
 } from './lib/repository'
 import { hasSupabaseConfig } from './lib/supabase'
-import type { AppSnapshot, CourierLocation, DeliveryStatus, Order, PublicTracking, Role, RoutePlan, SessionUser } from './types'
+import type { AppSnapshot, CourierLocation, DeliveryEvent, DeliveryStatus, Order, Role, RoutePlan, SessionUser } from './types'
 
 type RouteState =
   | { name: 'home' }
   | { name: 'admin' }
+  | { name: 'client' }
   | { name: 'courier' }
-  | { name: 'track'; code: string }
 
 const activeStatuses: DeliveryStatus[] = ['assigned', 'pickup', 'in_transit', 'delayed']
+
+const pickupOptions = [
+  {
+    name: 'Bistro Avenida',
+    address: 'Av. Paulista, 1578 - Bela Vista, Sao Paulo',
+    point: { lat: -23.561684, lng: -46.655981 },
+  },
+  {
+    name: 'Mercado Central Express',
+    address: 'Rua Augusta, 1600 - Consolacao, Sao Paulo',
+    point: { lat: -23.555421, lng: -46.662089 },
+  },
+  {
+    name: 'Farmacia Jardins',
+    address: 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo',
+    point: { lat: -23.566076, lng: -46.656292 },
+  },
+]
+
+const destinationOptions = [
+  {
+    label: 'Rua Oscar Freire, 620 - Jardins',
+    address: 'Rua Oscar Freire, 620 - Jardins, Sao Paulo',
+    point: { lat: -23.561325, lng: -46.669402 },
+  },
+  {
+    label: 'Rua Frei Caneca, 720 - Consolacao',
+    address: 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo',
+    point: { lat: -23.553379, lng: -46.651782 },
+  },
+  {
+    label: 'Rua Pamplona, 1005 - Jardim Paulista',
+    address: 'Rua Pamplona, 1005 - Jardim Paulista, Sao Paulo',
+    point: { lat: -23.568295, lng: -46.661425 },
+  },
+]
 
 function App() {
   const [route, setRoute] = useState<RouteState>(readRoute())
@@ -49,11 +87,8 @@ function App() {
   const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null)
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tracking, setTracking] = useState<PublicTracking | null>(null)
-  const [trackingLoading, setTrackingLoading] = useState(false)
 
   const selectedOrder = snapshot.orders.find((order) => order.id === selectedOrderId) ?? snapshot.orders[0] ?? null
-  const routeOrder = route.name === 'track' ? tracking?.order ?? null : selectedOrder
 
   useEffect(() => {
     const onPopState = () => setRoute(readRoute())
@@ -85,41 +120,17 @@ function App() {
   }, [session])
 
   useEffect(() => {
-    if (route.name !== 'track') return
+    if (!selectedOrder) return
 
     let cancelled = false
-    const load = async () => {
-      setTrackingLoading(true)
-      try {
-        const payload = await loadPublicTracking(route.code)
-        if (!cancelled) setTracking(payload)
-      } catch (error) {
-        showNotice(error instanceof Error ? error.message : 'Nao foi possivel carregar o rastreamento.')
-      } finally {
-        if (!cancelled) setTrackingLoading(false)
-      }
-    }
-
-    void load()
-    const interval = window.setInterval(() => void load(), 12000)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
-  }, [route])
-
-  useEffect(() => {
-    if (!routeOrder) return
-
-    let cancelled = false
-    void getRoutePlan(routeOrder).then((plan) => {
+    void getRoutePlan(selectedOrder).then((plan) => {
       if (!cancelled) setRoutePlan(plan)
     })
 
     return () => {
       cancelled = true
     }
-  }, [routeOrder])
+  }, [selectedOrder])
 
   function navigate(path: string) {
     window.history.pushState({}, '', path)
@@ -131,7 +142,7 @@ function App() {
     try {
       const user = await signInWithDemoRole(role)
       setSession(user)
-      navigate(role === 'admin' ? '/admin' : '/motoboy')
+      navigate(role === 'admin' ? '/admin' : role === 'client' ? '/cliente' : '/motoboy')
       showNotice(`Sessao iniciada como ${user.name}.`)
     } catch (error) {
       showNotice(error instanceof Error ? error.message : 'Nao foi possivel entrar.')
@@ -152,6 +163,17 @@ function App() {
     window.setTimeout(() => setNotice(''), 4200)
   }
 
+  async function createOrder(input: CreateOrderInput) {
+    try {
+      const order = await createClientOrder(input)
+      setSnapshot((current) => ({ ...current, orders: [order, ...current.orders] }))
+      setSelectedOrderId(order.id)
+      showNotice('Pedido criado e enviado para o admin.')
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Falha ao criar pedido.')
+    }
+  }
+
   function applyLocation(location: CourierLocation) {
     setSnapshot((current) => ({
       ...current,
@@ -161,12 +183,31 @@ function App() {
       ],
     }))
 
-    if (tracking?.order.id === location.orderId) {
-      setTracking((current) => (current ? { ...current, location } : current))
-    }
-
     void upsertLocation(location).catch((error) => {
       showNotice(error instanceof Error ? error.message : 'Falha ao enviar localizacao.')
+    })
+  }
+
+  function assignOrder(order: Order, courierId: string) {
+    const courier = snapshot.couriers.find((item) => item.id === courierId)
+    const event: DeliveryEvent = {
+      id: crypto.randomUUID(),
+      orderId: order.id,
+      actorName: session?.name ?? 'Admin',
+      status: 'assigned',
+      message: `Pedido atribuido para ${courier?.name ?? 'motoboy'}.`,
+      createdAt: new Date().toISOString(),
+    }
+
+    setSnapshot((current) => ({
+      ...current,
+      couriers: current.couriers.map((item) => item.id === courierId ? { ...item, status: 'busy' } : item),
+      orders: current.orders.map((item) => item.id === order.id ? { ...item, assignedCourierId: courierId, status: 'assigned' } : item),
+      events: [event, ...current.events],
+    }))
+
+    void assignOrderToCourier(order.id, courierId, session?.name ?? 'Admin').catch((error) => {
+      showNotice(error instanceof Error ? error.message : 'Falha ao atribuir pedido.')
     })
   }
 
@@ -204,15 +245,30 @@ function App() {
       {route.name === 'admin' ? (
         session?.role === 'admin' ? (
           <AdminPage
+            assignOrder={assignOrder}
             routePlan={routePlan}
             selectedOrder={selectedOrder}
             selectedOrderId={selectedOrderId}
             setSelectedOrderId={setSelectedOrderId}
-            showNotice={showNotice}
             snapshot={snapshot}
           />
         ) : (
           <LoginGate loading={loading} login={login} role="admin" />
+        )
+      ) : null}
+
+      {route.name === 'client' ? (
+        session?.role === 'client' ? (
+          <ClientPage
+            createOrder={createOrder}
+            routePlan={routePlan}
+            selectedOrderId={selectedOrderId}
+            session={session}
+            setSelectedOrderId={setSelectedOrderId}
+            snapshot={snapshot}
+          />
+        ) : (
+          <LoginGate loading={loading} login={login} role="client" />
         )
       ) : null}
 
@@ -229,10 +285,6 @@ function App() {
         ) : (
           <LoginGate loading={loading} login={login} role="courier" />
         )
-      ) : null}
-
-      {route.name === 'track' ? (
-        <TrackingPage loading={trackingLoading} routePlan={routePlan} tracking={tracking} />
       ) : null}
     </div>
   )
@@ -255,8 +307,8 @@ function Header({ route, session, navigate, logout }: {
       </button>
       <nav className="nav-links" aria-label="Principal">
         <button className={route.name === 'admin' ? 'active' : ''} onClick={() => navigate('/admin')} type="button">Admin</button>
+        <button className={route.name === 'client' ? 'active' : ''} onClick={() => navigate('/cliente')} type="button">Cliente</button>
         <button className={route.name === 'courier' ? 'active' : ''} onClick={() => navigate('/motoboy')} type="button">Motoboy</button>
-        <button className={route.name === 'track' ? 'active' : ''} onClick={() => navigate('/r/SP-8K2M')} type="button">Rastreio</button>
       </nav>
       {session ? (
         <button className="ghost-button" onClick={logout} type="button">
@@ -279,16 +331,19 @@ function HomePage({ loading, login, navigate, snapshot }: {
   return (
     <main className="home-grid">
       <section className="hero-card">
-        <div className="eyebrow"><Radio size={16} /> Operacao em tempo real</div>
-        <h1>Controle entregas, motoboys e rastreamento em uma unica central.</h1>
+        <div className="eyebrow"><Radio size={16} /> Operacao autenticada</div>
+        <h1>Cliente pede, admin despacha, motoboy entrega com GPS.</h1>
         <p>
-          Painel admin, link do motoboy, rastreio publico e mapa com previsao de chegada. Feito para demo publica com Supabase, Vercel e dados de teste seguros.
+          Tres areas protegidas para simular o fluxo real: o cliente cria pedidos, o admin acompanha e atribui entregas, e o motoboy executa a rota com localizacao em tempo real.
         </p>
         <div className="hero-actions">
           <button className="primary-button" disabled={loading} onClick={() => login('admin')} type="button">
             <ShieldCheck size={18} /> Entrar como admin
           </button>
-          <button className="secondary-button" disabled={loading} onClick={() => login('courier')} type="button">
+          <button className="secondary-button" disabled={loading} onClick={() => login('client')} type="button">
+            <ShoppingBag size={18} /> Entrar como cliente
+          </button>
+          <button className="ghost-button" disabled={loading} onClick={() => login('courier')} type="button">
             <Smartphone size={18} /> Entrar como motoboy
           </button>
         </div>
@@ -304,9 +359,9 @@ function HomePage({ loading, login, navigate, snapshot }: {
           <strong>{onlineCouriers}</strong>
         </div>
         <div className="quick-links">
-          <button onClick={() => navigate('/admin')} type="button"><ExternalLink size={16} /> Link admin</button>
-          <button onClick={() => navigate('/motoboy')} type="button"><ExternalLink size={16} /> Link motoboy</button>
-          <button onClick={() => navigate('/r/SP-8K2M')} type="button"><ExternalLink size={16} /> Link cliente</button>
+          <button onClick={() => navigate('/admin')} type="button"><ShieldCheck size={16} /> Area admin</button>
+          <button onClick={() => navigate('/cliente')} type="button"><ShoppingBag size={16} /> Area cliente</button>
+          <button onClick={() => navigate('/motoboy')} type="button"><Bike size={16} /> Area motoboy</button>
         </div>
       </aside>
     </main>
@@ -314,31 +369,38 @@ function HomePage({ loading, login, navigate, snapshot }: {
 }
 
 function LoginGate({ loading, login, role }: { loading: boolean; login: (role: Role) => void; role: Role }) {
+  const labels: Record<Role, { eyebrow: string; title: string; action: string }> = {
+    admin: { eyebrow: 'Acesso admin', title: 'Painel administrativo', action: 'Entrar como admin de teste' },
+    client: { eyebrow: 'Acesso cliente', title: 'Area do cliente', action: 'Entrar como cliente de teste' },
+    courier: { eyebrow: 'Acesso motoboy', title: 'Link do motoboy', action: 'Entrar como motoboy de teste' },
+  }
+
   return (
     <main className="login-gate">
       <div className="login-card">
-        <div className="eyebrow"><UserRound size={16} /> Acesso {role === 'admin' ? 'admin' : 'motoboy'}</div>
-        <h1>{role === 'admin' ? 'Painel administrativo' : 'Link do motoboy'}</h1>
+        <div className="eyebrow"><UserRound size={16} /> {labels[role].eyebrow}</div>
+        <h1>{labels[role].title}</h1>
         <p>Use as credenciais de demo configuradas no seed ou rode sem Supabase em modo local.</p>
         <button className="primary-button" disabled={loading} onClick={() => login(role)} type="button">
-          Entrar como {role === 'admin' ? 'admin' : 'motoboy'} de teste
+          {labels[role].action}
         </button>
       </div>
     </main>
   )
 }
 
-function AdminPage({ routePlan, selectedOrder, selectedOrderId, setSelectedOrderId, showNotice, snapshot }: {
+function AdminPage({ assignOrder, routePlan, selectedOrder, selectedOrderId, setSelectedOrderId, snapshot }: {
+  assignOrder: (order: Order, courierId: string) => void
   routePlan: RoutePlan | null
   selectedOrder: Order | null
   selectedOrderId: string
   setSelectedOrderId: (id: string) => void
-  showNotice: (message: string) => void
   snapshot: AppSnapshot
 }) {
   const activeOrders = snapshot.orders.filter((order) => activeStatuses.includes(order.status))
   const deliveredToday = snapshot.orders.filter((order) => order.status === 'delivered').length
   const onlineCouriers = snapshot.couriers.filter((courier) => courier.status !== 'offline').length
+  const candidateCouriers = snapshot.couriers.filter((courier) => courier.status !== 'offline')
   const selectedLocation = selectedOrder
     ? snapshot.locations.find((location) => location.orderId === selectedOrder.id || location.courierId === selectedOrder.assignedCourierId)
     : null
@@ -346,19 +408,13 @@ function AdminPage({ routePlan, selectedOrder, selectedOrderId, setSelectedOrder
     ? estimateEtaFromLocation({ lat: selectedLocation.lat, lng: selectedLocation.lng }, selectedOrder.destination)
     : routePlan?.etaMinutes ?? selectedOrder?.etaMinutes ?? 0
 
-  async function copyTrackingLink(order: Order) {
-    const url = `${window.location.origin}/r/${order.publicCode}`
-    await navigator.clipboard.writeText(url)
-    showNotice('Link de rastreamento copiado.')
-  }
-
   return (
     <main className="dashboard-grid">
       <section className="operation-column">
         <div className="section-heading">
           <div>
             <span className="eyebrow"><Gauge size={16} /> Central de despacho</span>
-            <h1>Pedidos a caminho</h1>
+            <h1>Pedidos da operacao</h1>
           </div>
           <button className="ghost-button" onClick={() => window.location.reload()} type="button"><RefreshCw size={16} /> Atualizar</button>
         </div>
@@ -383,7 +439,7 @@ function AdminPage({ routePlan, selectedOrder, selectedOrderId, setSelectedOrder
                 <strong>{order.number} - {order.customerName}</strong>
                 <small>{order.merchantName}</small>
                 <span className="order-meta">
-                  <MapPin size={14} /> {courier?.name ?? 'Sem motoboy'}
+                  <MapPin size={14} /> {courier?.name ?? 'Aguardando despacho'}
                 </span>
               </button>
             )
@@ -411,11 +467,147 @@ function AdminPage({ routePlan, selectedOrder, selectedOrderId, setSelectedOrder
               <span><Navigation size={16} /> {(routePlan?.distanceKm ?? selectedOrder.distanceKm).toFixed(1)} km</span>
               <span>{formatCurrency(selectedOrder.totalCents)}</span>
             </div>
-            <button className="secondary-button" onClick={() => void copyTrackingLink(selectedOrder)} type="button">
-              <Copy size={16} /> Copiar link publico
-            </button>
+            {selectedOrder.assignedCourierId ? null : (
+              <div className="assignment-panel">
+                {candidateCouriers.map((courier) => (
+                  <button className="secondary-button" key={courier.id} onClick={() => assignOrder(selectedOrder, courier.id)} type="button">
+                    <Bike size={16} /> Atribuir {courier.name.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
+      </section>
+    </main>
+  )
+}
+
+function ClientPage({ createOrder, routePlan, selectedOrderId, session, setSelectedOrderId, snapshot }: {
+  createOrder: (input: CreateOrderInput) => Promise<void>
+  routePlan: RoutePlan | null
+  selectedOrderId: string
+  session: SessionUser
+  setSelectedOrderId: (id: string) => void
+  snapshot: AppSnapshot
+}) {
+  const [merchantIndex, setMerchantIndex] = useState('0')
+  const [destinationIndex, setDestinationIndex] = useState('0')
+  const [itemName, setItemName] = useState('Pedido de teste')
+  const [phone, setPhone] = useState('+55 11 90000-1001')
+  const clientOrders = snapshot.orders.filter((order) => order.clientProfileId === session.id)
+  const selectedOrder = clientOrders.find((order) => order.id === selectedOrderId) ?? clientOrders[0] ?? null
+  const selectedLocation = selectedOrder
+    ? snapshot.locations.find((location) => location.orderId === selectedOrder.id || location.courierId === selectedOrder.assignedCourierId)
+    : null
+  const eta = selectedOrder && selectedLocation
+    ? estimateEtaFromLocation(selectedLocation, selectedOrder.destination)
+    : routePlan?.etaMinutes ?? selectedOrder?.etaMinutes ?? 0
+
+  async function submitOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const pickup = pickupOptions[Number(merchantIndex)] ?? pickupOptions[0]
+    const destination = destinationOptions[Number(destinationIndex)] ?? destinationOptions[0]
+    await createOrder({
+      clientProfileId: session.id,
+      customerName: session.name,
+      customerPhone: phone,
+      merchantName: pickup.name,
+      pickupAddress: pickup.address,
+      destinationAddress: destination.address,
+      pickup: pickup.point,
+      destination: destination.point,
+      totalCents: 6990,
+      items: [{ name: itemName || 'Pedido de teste', quantity: 1 }],
+    })
+    setItemName('Pedido de teste')
+  }
+
+  return (
+    <main className="client-grid">
+      <section className="client-panel">
+        <span className="eyebrow"><ShoppingBag size={16} /> Area do cliente</span>
+        <h1>Fazer novo pedido</h1>
+        <form className="order-form" onSubmit={(event) => void submitOrder(event)}>
+          <label>
+            Loja
+            <select value={merchantIndex} onChange={(event) => setMerchantIndex(event.target.value)}>
+              {pickupOptions.map((option, index) => <option key={option.name} value={index}>{option.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Entregar em
+            <select value={destinationIndex} onChange={(event) => setDestinationIndex(event.target.value)}>
+              {destinationOptions.map((option, index) => <option key={option.address} value={index}>{option.label}</option>)}
+            </select>
+          </label>
+          <label>
+            Item
+            <input value={itemName} onChange={(event) => setItemName(event.target.value)} />
+          </label>
+          <label>
+            Celular do cliente
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+          </label>
+          <button className="primary-button full" type="submit"><PlusCircle size={18} /> Criar pedido</button>
+        </form>
+      </section>
+
+      <section className="client-panel client-orders">
+        <div className="section-heading compact-heading">
+          <div>
+            <span className="eyebrow"><PackageCheck size={16} /> Meus pedidos</span>
+            <h1>Status</h1>
+          </div>
+        </div>
+        <div className="orders-list">
+          {clientOrders.map((order) => {
+            const courier = snapshot.couriers.find((item) => item.id === order.assignedCourierId)
+            return (
+              <button
+                className={`order-card ${selectedOrder?.id === order.id ? 'selected' : ''}`}
+                key={order.id}
+                onClick={() => setSelectedOrderId(order.id)}
+                type="button"
+              >
+                <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+                <strong>{order.number} - {order.merchantName}</strong>
+                <small>{order.destinationAddress}</small>
+                <span className="order-meta"><Bike size={14} /> {courier?.name ?? 'Admin ainda vai despachar'}</span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="client-map-panel">
+        {selectedOrder ? (
+          <>
+            <MapCanvas
+              height="520px"
+              locations={selectedLocation ? [selectedLocation] : []}
+              orders={[selectedOrder]}
+              routePlan={routePlan}
+              selectedOrder={selectedOrder}
+            />
+            <div className="detail-panel client-detail-panel">
+              <div>
+                <span className={`status-pill ${selectedOrder.status}`}>{statusLabel(selectedOrder.status)}</span>
+                <h2>{selectedOrder.number} - {selectedOrder.merchantName}</h2>
+                <p>{selectedOrder.destinationAddress}</p>
+              </div>
+              <div className="detail-metrics">
+                <span><Clock3 size={16} /> {selectedOrder.assignedCourierId ? `ETA ${eta} min` : 'Aguardando admin'}</span>
+                <span>{formatCurrency(selectedOrder.totalCents)}</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty-map-state">
+            <h2>Nenhum pedido ainda</h2>
+            <p>Crie um pedido para acompanhar o despacho, status e rota aqui.</p>
+          </div>
+        )}
       </section>
     </main>
   )
@@ -561,47 +753,6 @@ function CourierPage({ applyLocation, changeOrderStatus, routePlan, session, sho
   )
 }
 
-function TrackingPage({ loading, routePlan, tracking }: {
-  loading: boolean
-  routePlan: RoutePlan | null
-  tracking: PublicTracking | null
-}) {
-  if (loading) {
-    return <main className="tracking-page"><div className="tracking-card"><h1>Carregando rastreamento...</h1></div></main>
-  }
-
-  if (!tracking) {
-    return <main className="tracking-page"><div className="tracking-card"><h1>Pedido nao encontrado</h1><p>Confira o codigo do link de rastreamento.</p></div></main>
-  }
-
-  const eta = tracking.location
-    ? estimateEtaFromLocation(tracking.location, tracking.order.destination)
-    : routePlan?.etaMinutes ?? tracking.order.etaMinutes
-
-  return (
-    <main className="tracking-page">
-      <section className="tracking-card">
-        <span className="eyebrow"><MapPin size={16} /> Rastreamento publico</span>
-        <h1>{tracking.order.status === 'delivered' ? 'Pedido entregue' : `Chega em cerca de ${eta} min`}</h1>
-        <p>{tracking.order.merchantName} para {tracking.order.customerName}</p>
-        <div className="detail-metrics">
-          <span className={`status-pill ${tracking.order.status}`}>{statusLabel(tracking.order.status)}</span>
-          <span>{tracking.courier?.name ?? 'Aguardando motoboy'}</span>
-          <span>{tracking.order.publicCode}</span>
-        </div>
-      </section>
-
-      <MapCanvas
-        height="560px"
-        locations={tracking.location ? [tracking.location] : []}
-        orders={[tracking.order]}
-        routePlan={routePlan}
-        selectedOrder={tracking.order}
-      />
-    </main>
-  )
-}
-
 function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="stat-card">
@@ -628,8 +779,8 @@ function nextStatusLabel(status: DeliveryStatus) {
 function readRoute(): RouteState {
   const pathname = window.location.pathname
   if (pathname.startsWith('/admin')) return { name: 'admin' }
+  if (pathname.startsWith('/cliente') || pathname.startsWith('/client')) return { name: 'client' }
   if (pathname.startsWith('/motoboy')) return { name: 'courier' }
-  if (pathname.startsWith('/r/')) return { name: 'track', code: decodeURIComponent(pathname.replace('/r/', '')) }
   return { name: 'home' }
 }
 

@@ -30,6 +30,12 @@ const demoUsers = {
     name: 'Rafael Motta',
     role: 'courier',
   },
+  client: {
+    email: process.env.VITE_DEMO_CLIENT_EMAIL || 'cliente@motoboy.demo',
+    password: process.env.VITE_DEMO_CLIENT_PASSWORD || 'Cliente@123456',
+    name: 'Camila Torres',
+    role: 'client',
+  },
 }
 
 const ids = {
@@ -47,16 +53,18 @@ try {
   const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8')
   await client.query(schema)
 
-  const adminUser = await upsertAuthUser(demoUsers.admin)
-  const courierUser = await upsertAuthUser(demoUsers.courier)
+const adminUser = await upsertAuthUser(demoUsers.admin)
+const courierUser = await upsertAuthUser(demoUsers.courier)
+const clientUser = await upsertAuthUser(demoUsers.client)
 
-  await upsertProfiles(adminUser, courierUser)
-  await seedOperationalData(adminUser, courierUser)
+await upsertProfiles(adminUser, courierUser, clientUser)
+await seedOperationalData(adminUser, courierUser, clientUser)
 
   console.log('Supabase configurado com sucesso.')
   console.log(`Admin demo: ${demoUsers.admin.email}`)
+  console.log(`Cliente demo: ${demoUsers.client.email}`)
   console.log(`Motoboy demo: ${demoUsers.courier.email}`)
-  console.log('Pedido publico demo: SP-8K2M')
+  console.log('Fluxo demo: cliente cria, admin atribui, motoboy entrega.')
 } finally {
   await client.end()
 }
@@ -149,10 +157,10 @@ async function upsertEmailIdentity(userId, email) {
   )
 }
 
-async function upsertProfiles(adminUser, courierUser) {
+async function upsertProfiles(adminUser, courierUser, clientUser) {
   await client.query(
     `insert into public.profiles (id, name, email, role)
-     values ($1, $2, $3, $4), ($5, $6, $7, $8)
+     values ($1, $2, $3, $4), ($5, $6, $7, $8), ($9, $10, $11, $12)
      on conflict (id) do update
      set name = excluded.name,
          email = excluded.email,
@@ -166,11 +174,15 @@ async function upsertProfiles(adminUser, courierUser) {
       courierUser.name,
       courierUser.email,
       courierUser.role,
+      clientUser.id,
+      clientUser.name,
+      clientUser.email,
+      clientUser.role,
     ],
   )
 }
 
-async function seedOperationalData(adminUser, courierUser) {
+async function seedOperationalData(adminUser, courierUser, clientUser) {
   const now = Date.now()
 
   await client.query(
@@ -192,28 +204,29 @@ async function seedOperationalData(adminUser, courierUser) {
 
   await client.query(
     `insert into public.orders (
-       id, number, public_code, customer_name, customer_phone, merchant_name,
-       pickup_address, destination_address, pickup_lat, pickup_lng,
+     id, number, public_code, customer_name, customer_phone, merchant_name,
+       client_profile_id, pickup_address, destination_address, pickup_lat, pickup_lng,
        destination_lat, destination_lng, status, assigned_courier_id,
        total_cents, eta_minutes, distance_km, items, created_at, promised_at
      ) values
-       ($1, '#1001', 'SP-8K2M', 'Camila Torres', '+55 11 90000-1001', 'Bistro Avenida',
+       ($1, '#1001', 'SP-8K2M', 'Camila Torres', '+55 11 90000-1001', 'Bistro Avenida', $2,
         'Av. Paulista, 1578 - Bela Vista, Sao Paulo', 'Rua Oscar Freire, 620 - Jardins, Sao Paulo',
-        -23.561684, -46.655981, -23.561325, -46.669402, 'in_transit', $2,
-        8450, 13, 3.6, $3::jsonb, $4, $5),
-       ($6, '#1002', 'SP-4Q9Z', 'Bruno Martins', '+55 11 90000-1002', 'Mercado Central Express',
+        -23.561684, -46.655981, -23.561325, -46.669402, 'in_transit', $3,
+        8450, 13, 3.6, $4::jsonb, $5, $6),
+       ($7, '#1002', 'SP-4Q9Z', 'Bruno Martins', '+55 11 90000-1002', 'Mercado Central Express', $2,
         'Rua Augusta, 1600 - Consolacao, Sao Paulo', 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo',
-        -23.555421, -46.662089, -23.553379, -46.651782, 'assigned', $7,
-        12990, 21, 2.8, $8::jsonb, $9, $10),
-       ($11, '#1003', 'SP-7L1A', 'Nadia Lima', '+55 11 90000-1003', 'Farmacia Jardins',
+        -23.555421, -46.662089, -23.553379, -46.651782, 'assigned', $8,
+        12990, 21, 2.8, $9::jsonb, $10, $11),
+       ($12, '#1003', 'SP-7L1A', 'Nadia Lima', '+55 11 90000-1003', 'Farmacia Jardins', $2,
         'Alameda Santos, 980 - Jardim Paulista, Sao Paulo', 'Rua Pamplona, 1005 - Jardim Paulista, Sao Paulo',
         -23.566076, -46.656292, -23.568295, -46.661425, 'queued', null,
-        5290, 0, 1.4, $12::jsonb, $13, $14)
+        5290, 0, 1.4, $13::jsonb, $14, $15)
      on conflict (id) do update
      set number = excluded.number,
          public_code = excluded.public_code,
          customer_name = excluded.customer_name,
          customer_phone = excluded.customer_phone,
+         client_profile_id = excluded.client_profile_id,
          merchant_name = excluded.merchant_name,
          pickup_address = excluded.pickup_address,
          destination_address = excluded.destination_address,
@@ -231,6 +244,7 @@ async function seedOperationalData(adminUser, courierUser) {
          promised_at = excluded.promised_at`,
     [
       ids.order1001,
+      clientUser.id,
       ids.courierRafael,
       JSON.stringify([{ name: 'Combo executivo', quantity: 1 }, { name: 'Suco natural', quantity: 2 }]),
       new Date(now - 1000 * 60 * 36),

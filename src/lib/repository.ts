@@ -9,7 +9,6 @@ import type {
   DeliveryEvent,
   DeliveryStatus,
   Order,
-  PublicTracking,
   Role,
   SessionUser,
 } from '../types'
@@ -20,6 +19,7 @@ type OrderRow = {
   public_code: string
   customer_name: string
   customer_phone: string
+  client_profile_id: string | null
   merchant_name: string
   pickup_address: string
   destination_address: string
@@ -69,6 +69,19 @@ type EventRow = {
   created_at: string
 }
 
+export type CreateOrderInput = {
+  clientProfileId: string
+  customerName: string
+  customerPhone: string
+  merchantName: string
+  pickupAddress: string
+  destinationAddress: string
+  pickup: { lat: number; lng: number }
+  destination: { lat: number; lng: number }
+  totalCents: number
+  items: Array<{ name: string; quantity: number }>
+}
+
 export async function signInWithDemoRole(role: Role): Promise<SessionUser> {
   if (!supabase) {
     const profile = demoProfiles.find((item) => item.role === role)
@@ -82,7 +95,7 @@ export async function signInWithDemoRole(role: Role): Promise<SessionUser> {
     }
   }
 
-  const credentials = role === 'admin' ? appCredentials.admin : appCredentials.courier
+  const credentials = appCredentials[role]
   const { data, error } = await supabase.auth.signInWithPassword(credentials)
   if (error) throw error
 
@@ -129,32 +142,78 @@ export async function loadSnapshot(): Promise<AppSnapshot> {
   }
 }
 
-export async function loadPublicTracking(publicCode: string): Promise<PublicTracking | null> {
-  if (!supabase) {
-    const order = demoSnapshot.orders.find((item) => item.publicCode.toLowerCase() === publicCode.toLowerCase())
-    if (!order) return null
-
-    const courier = demoSnapshot.couriers.find((item) => item.id === order.assignedCourierId) ?? null
-    const location = demoSnapshot.locations.find((item) => item.orderId === order.id) ?? null
-    return { order, courier, location }
+export async function createClientOrder(input: CreateOrderInput): Promise<Order> {
+  const order: Order = {
+    id: crypto.randomUUID(),
+    number: `#${Math.floor(1000 + Math.random() * 9000)}`,
+    publicCode: `ORD-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    clientProfileId: input.clientProfileId,
+    merchantName: input.merchantName,
+    pickupAddress: input.pickupAddress,
+    destinationAddress: input.destinationAddress,
+    pickup: input.pickup,
+    destination: input.destination,
+    status: 'queued',
+    assignedCourierId: null,
+    totalCents: input.totalCents,
+    createdAt: new Date().toISOString(),
+    promisedAt: new Date(Date.now() + 1000 * 60 * 45).toISOString(),
+    etaMinutes: 0,
+    distanceKm: 0,
+    items: input.items,
   }
 
-  const { data, error } = await supabase.rpc('get_public_tracking', { p_code: publicCode })
+  if (!supabase) return order
+
+  const { data, error } = await supabase
+    .from('orders')
+    .insert({
+      id: order.id,
+      number: order.number,
+      public_code: order.publicCode,
+      customer_name: order.customerName,
+      customer_phone: order.customerPhone,
+      client_profile_id: order.clientProfileId,
+      merchant_name: order.merchantName,
+      pickup_address: order.pickupAddress,
+      destination_address: order.destinationAddress,
+      pickup_lat: order.pickup.lat,
+      pickup_lng: order.pickup.lng,
+      destination_lat: order.destination.lat,
+      destination_lng: order.destination.lng,
+      status: order.status,
+      assigned_courier_id: null,
+      total_cents: order.totalCents,
+      eta_minutes: order.etaMinutes,
+      distance_km: order.distanceKm,
+      items: order.items,
+      promised_at: order.promisedAt,
+    })
+    .select('*')
+    .single()
   if (error) throw error
-  if (!data) return null
 
-  const payload = data as {
-    order: OrderRow | null
-    courier: CourierRow | null
-    location: LocationRow | null
-  }
-  if (!payload.order) return null
+  return mapOrder(data as OrderRow)
+}
 
-  return {
-    order: mapOrder(payload.order),
-    courier: payload.courier ? mapCourier(payload.courier) : null,
-    location: payload.location ? mapLocation(payload.location) : null,
-  }
+export async function assignOrderToCourier(orderId: string, courierId: string, actorName: string) {
+  if (!supabase) return
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ assigned_courier_id: courierId, status: 'assigned' })
+    .eq('id', orderId)
+  if (error) throw error
+
+  await supabase.from('couriers').update({ status: 'busy' }).eq('id', courierId)
+  await supabase.from('delivery_events').insert({
+    order_id: orderId,
+    actor_name: actorName,
+    status: 'assigned',
+    message: 'Pedido atribuido para motoboy.',
+  })
 }
 
 export async function updateOrderStatus(orderId: string, status: DeliveryStatus, actorName: string) {
@@ -214,6 +273,7 @@ function mapOrder(row: OrderRow): Order {
     publicCode: row.public_code,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    clientProfileId: row.client_profile_id,
     merchantName: row.merchant_name,
     pickupAddress: row.pickup_address,
     destinationAddress: row.destination_address,

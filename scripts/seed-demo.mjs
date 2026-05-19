@@ -31,6 +31,12 @@ const users = {
     name: 'Rafael Motta',
     role: 'courier',
   },
+  client: {
+    email: process.env.VITE_DEMO_CLIENT_EMAIL || 'cliente@motoboy.demo',
+    password: process.env.VITE_DEMO_CLIENT_PASSWORD || 'Cliente@123456',
+    name: 'Camila Torres',
+    role: 'client',
+  },
 }
 
 const ids = {
@@ -44,6 +50,7 @@ const ids = {
 
 const adminUser = await upsertAuthUser(users.admin)
 const courierUser = await upsertAuthUser(users.courier)
+const clientUser = await upsertAuthUser(users.client)
 
 await upsert('profiles', [
   {
@@ -57,6 +64,12 @@ await upsert('profiles', [
     name: users.courier.name,
     email: users.courier.email,
     role: users.courier.role,
+  },
+  {
+    id: clientUser.id,
+    name: users.client.name,
+    email: users.client.email,
+    role: users.client.role,
   },
 ])
 
@@ -102,6 +115,7 @@ await upsert('orders', [
     public_code: 'SP-8K2M',
     customer_name: 'Camila Torres',
     customer_phone: '+55 11 90000-1001',
+    client_profile_id: clientUser.id,
     merchant_name: 'Bistro Avenida',
     pickup_address: 'Av. Paulista, 1578 - Bela Vista, Sao Paulo',
     destination_address: 'Rua Oscar Freire, 620 - Jardins, Sao Paulo',
@@ -127,6 +141,7 @@ await upsert('orders', [
     public_code: 'SP-4Q9Z',
     customer_name: 'Bruno Martins',
     customer_phone: '+55 11 90000-1002',
+    client_profile_id: clientUser.id,
     merchant_name: 'Mercado Central Express',
     pickup_address: 'Rua Augusta, 1600 - Consolacao, Sao Paulo',
     destination_address: 'Rua Frei Caneca, 720 - Consolacao, Sao Paulo',
@@ -152,6 +167,7 @@ await upsert('orders', [
     public_code: 'SP-7L1A',
     customer_name: 'Nadia Lima',
     customer_phone: '+55 11 90000-1003',
+    client_profile_id: clientUser.id,
     merchant_name: 'Farmacia Jardins',
     pickup_address: 'Alameda Santos, 980 - Jardim Paulista, Sao Paulo',
     destination_address: 'Rua Pamplona, 1005 - Jardim Paulista, Sao Paulo',
@@ -213,6 +229,7 @@ await insert('delivery_events', [
 
 console.log('Seed concluido com usuarios de demo:')
 console.log(`Admin: ${users.admin.email} / ${users.admin.password}`)
+console.log(`Cliente: ${users.client.email} / ${users.client.password}`)
 console.log(`Motoboy: ${users.courier.email} / ${users.courier.password}`)
 
 async function upsertAuthUser(user) {

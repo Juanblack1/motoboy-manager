@@ -1,12 +1,12 @@
 # Motoboy Manager
 
-Sistema demo para gerenciamento de entregas com motoboy, painel admin, link mobile do entregador, rastreamento publico e mapa com ETA.
+Sistema demo para gerenciamento de entregas com cliente, admin, motoboy, rastreamento autenticado e mapa com ETA.
 
 ## Recursos
 
-- Painel `/admin` com pedidos ativos, motoboys online, mapa e link publico de rastreio.
+- Painel `/admin` com pedidos ativos, motoboys online, mapa e despacho de entregas.
+- Area `/cliente` para o cliente criar pedidos e acompanhar somente seus proprios pedidos.
 - Link `/motoboy` para o entregador atualizar status, ativar GPS real do celular ou simular rota para demo.
-- Link `/r/:code` para cliente acompanhar pedido, motoboy, status, mapa e previsao.
 - Supabase Auth, Postgres, RLS e Realtime.
 - Leaflet + OpenStreetMap para mapa sem chave paga no frontend.
 - OSRM publico para rota/ETA com fallback local se a API falhar.
@@ -17,6 +17,7 @@ Sistema demo para gerenciamento de entregas com motoboy, painel admin, link mobi
 | Perfil | Email | Senha |
 | --- | --- | --- |
 | Admin | `admin@motoboy.demo` | `Admin@123456` |
+| Cliente | `cliente@motoboy.demo` | `Cliente@123456` |
 | Motoboy | `motoboy@motoboy.demo` | `Motoboy@123456` |
 
 Essas credenciais sao somente para demo. Nao use em producao.
@@ -62,6 +63,8 @@ VITE_DEMO_ADMIN_EMAIL=admin@motoboy.demo
 VITE_DEMO_ADMIN_PASSWORD=Admin@123456
 VITE_DEMO_COURIER_EMAIL=motoboy@motoboy.demo
 VITE_DEMO_COURIER_PASSWORD=Motoboy@123456
+VITE_DEMO_CLIENT_EMAIL=cliente@motoboy.demo
+VITE_DEMO_CLIENT_PASSWORD=Cliente@123456
 ```
 
 Nao configure `SUPABASE_SERVICE_ROLE_KEY` como variavel publica da Vercel para este app.
@@ -74,7 +77,7 @@ vercel
 vercel --prod
 ```
 
-O arquivo `vercel.json` redireciona rotas SPA como `/admin`, `/motoboy` e `/r/SP-8K2M` para `index.html`.
+O arquivo `vercel.json` redireciona rotas SPA como `/admin`, `/cliente` e `/motoboy` para `index.html`.
 
 ## Publicar no GitHub
 
@@ -91,8 +94,8 @@ Antes do push, confirme que `.env.local` nao foi adicionado. O `.gitignore` ja i
 
 - `/` apresenta o projeto e atalhos de teste.
 - `/admin` entra como admin de demo e mostra a operacao.
+- `/cliente` entra como cliente de demo e permite criar/acompanhar pedidos proprios.
 - `/motoboy` entra como motoboy de demo e permite GPS real/simulacao.
-- `/r/SP-8K2M` mostra o rastreamento publico do pedido demo.
 
 ## Observacoes de producao
 

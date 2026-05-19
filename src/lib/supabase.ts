@@ -23,4 +23,8 @@ export const appCredentials = {
     email: import.meta.env.VITE_DEMO_COURIER_EMAIL?.trim() || demoCredentials.courier.email,
     password: import.meta.env.VITE_DEMO_COURIER_PASSWORD?.trim() || demoCredentials.courier.password,
   },
+  client: {
+    email: import.meta.env.VITE_DEMO_CLIENT_EMAIL?.trim() || demoCredentials.client.email,
+    password: import.meta.env.VITE_DEMO_CLIENT_PASSWORD?.trim() || demoCredentials.client.password,
+  },
 }
